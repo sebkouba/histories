@@ -495,13 +495,17 @@ function HighlightedMarkdown({ markdown, query }: { markdown: string; query: str
   );
 }
 
-function searchTerms(query: string) {
+export function searchTerms(query: string) {
   const operators = new Set(["and", "or", "not", "near"]);
   const terms = [...query.matchAll(/"([^"]+)"|([\p{L}\p{N}][\p{L}\p{N}_'-]*)/gu)]
     .map((match) => (match[1] ?? match[2]).trim())
     .filter((term) => term && !operators.has(term.toLocaleLowerCase()));
-  return [...new Map(terms.map((term) => [term.toLocaleLowerCase(), term])).values()]
-    .sort((left, right) => right.length - left.length);
+  const unique = new Map<string, string>();
+  for (const term of terms) {
+    const normalized = term.toLocaleLowerCase();
+    if (!unique.has(normalized)) unique.set(normalized, term);
+  }
+  return [...unique.values()].sort((left, right) => right.length - left.length);
 }
 
 function escapeRegExp(value: string) {
@@ -571,7 +575,7 @@ function humanTokens(tokens: number) {
   return String(tokens);
 }
 
-function bundleDocuments(documents: ConversationDocument[], mode: ExportMode) {
+export function bundleDocuments(documents: ConversationDocument[], mode: ExportMode) {
   if (documents.length === 1) return documents[0].markdown;
   return `# Conversation history bundle\n\nSessions: ${documents.length}\nMode: ${mode}\n\n${documents.map((document) => document.markdown).join("\n---\n\n")}`;
 }
