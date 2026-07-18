@@ -42,6 +42,8 @@ const SOURCE_LABELS: Record<SourceKind, string> = {
   chatgpt: "ChatGPT",
 };
 
+const REFRESH_INTERVAL_MS = 30_000;
+
 export function App() {
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [query, setQuery] = useState("");
@@ -132,8 +134,17 @@ export function App() {
 
   useEffect(() => {
     if (!ready) return;
-    const interval = window.setInterval(() => void refresh(true), 5_000);
-    return () => window.clearInterval(interval);
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") void refresh(true);
+    };
+    const interval = window.setInterval(refreshWhenVisible, REFRESH_INTERVAL_MS);
+    window.addEventListener("focus", refreshWhenVisible);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("focus", refreshWhenVisible);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
   }, [ready, refresh]);
 
   useEffect(() => {
@@ -200,16 +211,46 @@ export function App() {
   }
 
   async function copyPath(conversation: ConversationSummary) {
-    const path = mode === "clean" ? conversation.clean_markdown_path : conversation.full_markdown_path;
-    await writeText(path);
-    showToast("Markdown path copied");
+    try {
+      const documents = await invoke<ConversationDocument[]>("get_documents", { ids: [conversation.id], mode });
+      const document = documents[0];
+      if (!document) throw new Error("Conversation not found");
+      const path = mode === "clean" ? document.clean_markdown_path : document.full_markdown_path;
+      await writeText(path);
+      showToast("Markdown path copied");
+    } catch (reason) {
+      setError(String(reason));
+    }
   }
 
   async function copySelectedPaths() {
-    const ordered = [...selectedItems].sort((left, right) => left.started_at.localeCompare(right.started_at));
-    const value = ordered.map((conversation) => mode === "clean" ? conversation.clean_markdown_path : conversation.full_markdown_path).join("\n");
-    await writeText(value);
-    showToast(`Copied ${ordered.length} path${ordered.length === 1 ? "" : "s"}`);
+    try {
+      const documents = await invoke<ConversationDocument[]>("get_documents", { ids: selectedItems.map((item) => item.id), mode });
+      const value = documents.map((conversation) => mode === "clean" ? conversation.clean_markdown_path : conversation.full_markdown_path).join("\n");
+      await writeText(value);
+      showToast(`Copied ${documents.length} path${documents.length === 1 ? "" : "s"}`);
+    } catch (reason) {
+      setError(String(reason));
+    }
+  }
+
+  async function revealMarkdown(conversation: ConversationSummary) {
+    try {
+      const documents = await invoke<ConversationDocument[]>("get_documents", { ids: [conversation.id], mode });
+      const document = documents[0];
+      if (!document) throw new Error("Conversation not found");
+      await revealItemInDir(mode === "clean" ? document.clean_markdown_path : document.full_markdown_path);
+    } catch (reason) {
+      setError(String(reason));
+    }
+  }
+
+  async function revealPath(path: string) {
+    try {
+      await revealItemInDir(path);
+    } catch (reason) {
+      setError(String(reason));
+    }
   }
 
   async function importChatgpt() {
@@ -220,6 +261,7 @@ export function App() {
       filters: [{ name: "ChatGPT export", extensions: ["json"] }],
     });
     if (typeof path !== "string") return;
+    refreshInFlight.current = true;
     setRefreshing(true);
     try {
       const report = await invoke<RefreshReport>("register_chatgpt_export", { path });
@@ -230,6 +272,7 @@ export function App() {
     } catch (reason) {
       setError(String(reason));
     } finally {
+      refreshInFlight.current = false;
       setRefreshing(false);
     }
   }
@@ -249,7 +292,7 @@ export function App() {
           </div>
         </div>
         <div className="topbar-actions">
-          <span className="freshness"><i className={lastRefresh?.failures.length ? "warning" : ""} />{refreshing ? "Checking sources…" : "Current · checks every 5s"}</span>
+          <span className="freshness"><i className={lastRefresh?.failures.length ? "warning" : ""} />{refreshing ? "Checking sources…" : "Current · checks every 30s"}</span>
           <button className="button subtle" onClick={() => void refresh()} disabled={refreshing}>
             <span className={refreshing ? "spin" : ""}><RefreshIcon /></span> Refresh
           </button>
@@ -346,11 +389,11 @@ export function App() {
                         <span className="message-count">{conversation.user_message_count} user · {conversation.assistant_message_count} agent messages</span>
                       </button>
                       <div className="token-count"><strong>~{humanTokens(mode === "clean" ? conversation.approx_clean_tokens : conversation.approx_full_tokens)}</strong><span>tokens</span></div>
-                      <div className="cwd" title={conversation.cwd ?? "No working directory"}>{shortPath(conversation.cwd)}</div>
+                      <div className="cwd" title={conversation.cwd ?? "No working directory"}>{shortPath(conversation.cwd, paths?.home_dir)}</div>
                       <div className="row-actions">
                         <IconButton label={`Copy ${mode} Markdown`} onClick={() => void copyDocuments([conversation.id])}><CopyIcon /></IconButton>
                         <IconButton label={`Copy ${mode} Markdown path`} onClick={() => void copyPath(conversation)}><PathIcon /></IconButton>
-                        <IconButton label="Reveal Markdown in Finder" onClick={() => void revealItemInDir(mode === "clean" ? conversation.clean_markdown_path : conversation.full_markdown_path)}><RevealIcon /></IconButton>
+                        <IconButton label="Reveal Markdown in Finder" onClick={() => void revealMarkdown(conversation)}><RevealIcon /></IconButton>
                         <button className="open-preview" aria-label="Preview conversation" onClick={() => setActiveId(conversation.id)}><ChevronIcon /></button>
                       </div>
                     </article>
@@ -365,7 +408,7 @@ export function App() {
           <div className="coverage">
             {lastRefresh?.sources.map((source) => <span key={source.source}><i className={source.available ? "ok" : "missing"} />{SOURCE_LABELS[source.source]} {source.available ? "connected" : source.source === "chatgpt" ? "needs export" : "not found"}</span>)}
           </div>
-          {paths && <button title={paths.exports_dir} onClick={() => void revealItemInDir(paths.exports_dir)}><PathIcon size={15} /> Open Markdown library</button>}
+          {paths && <button title={paths.exports_dir} onClick={() => void revealPath(paths.exports_dir)}><PathIcon size={15} /> Open Markdown library</button>}
         </footer>
       </main>
 
@@ -515,9 +558,10 @@ function safeDate(value: string) {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-function shortPath(value: string | null) {
+export function shortPath(value: string | null, homeDir?: string) {
   if (!value) return "—";
-  const home = "/Users/sebastian/";
+  if (!homeDir) return value;
+  const home = homeDir.endsWith("/") ? homeDir : `${homeDir}/`;
   return value.startsWith(home) ? `~/${value.slice(home.length)}` : value;
 }
 

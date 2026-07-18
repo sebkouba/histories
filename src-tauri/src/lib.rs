@@ -1,6 +1,6 @@
 use histories_core::{
     AppPaths, Catalog, ConversationDocument, ConversationSummary, ExportMode, RefreshReport,
-    Refresher, SearchRequest, SourceConfig,
+    Refresher, SearchRequest, SourceConfig, parse_chatgpt_export,
 };
 use serde::Serialize;
 use std::path::PathBuf;
@@ -94,11 +94,28 @@ async fn register_chatgpt_export(
         let path = PathBuf::from(path)
             .canonicalize()
             .map_err(|error| format!("Could not access ChatGPT export: {error}"))?;
+        let conversation_count = parse_chatgpt_export(&path).map_err(error_string)?.len();
+        if conversation_count == 0 {
+            return Err("The ChatGPT export contains no usable conversations".to_owned());
+        }
         let paths = AppPaths::discover(data_dir).map_err(error_string)?;
         let mut config = SourceConfig::load(&paths).map_err(error_string)?;
-        config.add_chatgpt_export(path);
+        config.add_chatgpt_export(&path);
         config.save(&paths).map_err(error_string)?;
-        Refresher { paths, config }.refresh().map_err(error_string)
+        let report = Refresher { paths, config }
+            .refresh()
+            .map_err(error_string)?;
+        if let Some(failure) = report
+            .failures
+            .iter()
+            .find(|failure| failure.path == path.display().to_string())
+        {
+            return Err(format!(
+                "Could not import ChatGPT export: {}",
+                failure.error
+            ));
+        }
+        Ok(report)
     })
     .await
     .map_err(|error| error.to_string())?

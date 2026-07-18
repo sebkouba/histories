@@ -96,7 +96,7 @@ pub fn render_bundle(conversations: &[Conversation], mode: ExportMode) -> String
 
 fn speaker(conversation: &Conversation, message: &Message) -> String {
     match message.kind {
-        MessageKind::User => "Sebastian".to_owned(),
+        MessageKind::User => "User".to_owned(),
         MessageKind::Assistant => conversation.source.agent_label().to_owned(),
         MessageKind::Tool => message
             .author
@@ -156,7 +156,7 @@ mod tests {
     #[test]
     fn clean_markdown_excludes_tool_payloads() {
         let markdown = render_markdown(&fixture(), ExportMode::Clean);
-        assert!(markdown.contains("## Sebastian\n\nQuestion"));
+        assert!(markdown.contains("## User\n\nQuestion"));
         assert!(markdown.contains("## Codex\n\nAnswer"));
         assert!(!markdown.contains("output"));
     }

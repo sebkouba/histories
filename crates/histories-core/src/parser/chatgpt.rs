@@ -1,8 +1,11 @@
 use crate::{Conversation, Message, MessageKind, SourceKind};
 use chrono::{DateTime, Utc};
+use serde::Deserializer as _;
+use serde::de::{SeqAccess, Visitor};
 use serde_json::Value;
 use std::{
     collections::{HashMap, HashSet},
+    fmt,
     fs::File,
     io::BufReader,
     path::Path,
@@ -15,22 +18,48 @@ pub fn parse_chatgpt_export(path: &Path) -> Result<Vec<Conversation>, ParseError
         path: path.display().to_string(),
         source,
     })?;
-    let value: Value =
-        serde_json::from_reader(BufReader::new(file)).map_err(|source| ParseError::Json {
+    let mut deserializer = serde_json::Deserializer::from_reader(BufReader::new(file));
+    let (entry_count, conversations) = deserializer
+        .deserialize_seq(ChatgptExportVisitor { path })
+        .map_err(|source| ParseError::Json {
             path: path.display().to_string(),
             source,
         })?;
-    let entries = value.as_array().ok_or_else(|| {
-        ParseError::Invalid(format!(
-            "ChatGPT export must be a JSON array: {}",
+    if entry_count != conversations.len() {
+        return Err(ParseError::Invalid(format!(
+            "parsed {} of {entry_count} ChatGPT conversations from {}; the export format may have changed",
+            conversations.len(),
             path.display()
-        ))
-    })?;
+        )));
+    }
+    Ok(conversations)
+}
 
-    Ok(entries
-        .iter()
-        .filter_map(|entry| parse_conversation(path, entry))
-        .collect())
+struct ChatgptExportVisitor<'a> {
+    path: &'a Path,
+}
+
+impl<'de> Visitor<'de> for ChatgptExportVisitor<'_> {
+    type Value = (usize, Vec<Conversation>);
+
+    fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("a ChatGPT conversations.json array")
+    }
+
+    fn visit_seq<A>(self, mut sequence: A) -> Result<Self::Value, A::Error>
+    where
+        A: SeqAccess<'de>,
+    {
+        let mut entry_count = 0;
+        let mut conversations = Vec::new();
+        while let Some(entry) = sequence.next_element::<Value>()? {
+            entry_count += 1;
+            if let Some(conversation) = parse_conversation(self.path, &entry) {
+                conversations.push(conversation);
+            }
+        }
+        Ok((entry_count, conversations))
+    }
 }
 
 fn parse_conversation(path: &Path, entry: &Value) -> Option<Conversation> {
@@ -192,5 +221,14 @@ mod tests {
                 .collect::<Vec<_>>(),
             ["Question", "New answer"]
         );
+    }
+
+    #[test]
+    fn rejects_exports_with_unrecognized_conversation_entries() {
+        let mut file = tempfile::NamedTempFile::new().unwrap();
+        write!(file, "[{{\"unexpected\":true}}]").unwrap();
+
+        let error = parse_chatgpt_export(file.path()).unwrap_err();
+        assert!(error.to_string().contains("export format may have changed"));
     }
 }

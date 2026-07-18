@@ -3,7 +3,7 @@ use chrono::{DateTime, Duration, Local, Utc};
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use histories_core::{
     AppPaths, Catalog, ConversationDocument, ExportMode, RefreshReport, Refresher, SearchRequest,
-    SourceConfig, SourceKind,
+    SourceConfig, SourceKind, parse_chatgpt_export,
 };
 use std::{fs, path::PathBuf, thread, time::Duration as StdDuration};
 
@@ -296,6 +296,10 @@ fn main() -> Result<()> {
             let path = path
                 .canonicalize()
                 .with_context(|| format!("could not access {}", path.display()))?;
+            let conversation_count = parse_chatgpt_export(&path)?.len();
+            if conversation_count == 0 {
+                bail!("the ChatGPT export contains no usable conversations");
+            }
             let paths = AppPaths::discover(data_dir)?;
             let mut config = SourceConfig::load(&paths)?;
             config.add_chatgpt_export(&path);
