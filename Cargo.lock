@@ -1686,8 +1686,10 @@ name = "histories-cli"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "chrono",
  "clap",
  "histories-core",
+ "serde_json",
 ]
 
 [[package]]
