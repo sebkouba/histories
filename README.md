@@ -14,6 +14,8 @@ Markdown paths into another agent session.
 - Full-text searches user and assistant messages with SQLite FTS5.
 - Highlights search terms in conversation previews and scrolls to the first
   match automatically.
+- Keeps library and transcript scrolling inside their respective panes, with a
+  draggable divider that remembers the preferred preview width.
 - Keeps selections while search and filters change, then copies all selected
   conversations as one chronological Markdown bundle.
 - Offers `clean` transcripts (user + agent messages) and `full` transcripts

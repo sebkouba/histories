@@ -3,6 +3,7 @@ import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { open } from "@tauri-apps/plugin-dialog";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 import {
   ChevronIcon,
   CloseIcon,
@@ -13,6 +14,7 @@ import {
   RevealIcon,
   SearchIcon,
 } from "./Icons";
+import { PaneDivider } from "./PaneDivider";
 import type {
   AppPaths,
   BootstrapResponse,
@@ -24,6 +26,7 @@ import type {
   SourceConfig,
   SourceKind,
 } from "./types";
+import { usePreviewPaneWidth } from "./usePreviewPaneWidth";
 
 const RANGE_OPTIONS = [
   { label: "2 days", value: 2 },
@@ -59,6 +62,7 @@ export function App() {
   const searchGeneration = useRef(0);
   const refreshInFlight = useRef(false);
   const searchInput = useRef<HTMLInputElement>(null);
+  const previewPane = usePreviewPaneWidth();
 
   const request = useMemo<SearchRequest>(() => ({
     query: query.trim() || null,
@@ -231,9 +235,10 @@ export function App() {
   }
 
   const visibleTokens = conversations.reduce((sum, conversation) => sum + (mode === "clean" ? conversation.approx_clean_tokens : conversation.approx_full_tokens), 0);
+  const appStyle = { "--preview-width": `${previewPane.width}px` } as CSSProperties;
 
   return (
-    <div className={`app-frame ${activeId !== null ? "preview-open" : ""}`}>
+    <div className={`app-frame ${activeId !== null ? "preview-open" : ""}`} style={appStyle}>
       <header className="topbar">
         <div className="brand-block">
           <div className="brand-mark"><i /><i /><i /></div>
@@ -365,8 +370,14 @@ export function App() {
 
       {activeId !== null && (
         <aside className="preview-panel" aria-label="Conversation preview">
+          <PaneDivider
+            maxWidth={previewPane.maxWidth}
+            minWidth={previewPane.minWidth}
+            onResize={previewPane.setWidth}
+            width={previewPane.width}
+          />
           <header>
-            <div><span className="preview-kicker">{mode} transcript</span><h2>{preview?.title ?? "Loading…"}</h2></div>
+            <div><span className="preview-kicker">{mode} transcript</span><h2 title={preview?.title}>{preview?.title ?? "Loading…"}</h2></div>
             <button className="close-preview" aria-label="Close preview" onClick={() => setActiveId(null)}><CloseIcon /></button>
           </header>
           {preview ? (
