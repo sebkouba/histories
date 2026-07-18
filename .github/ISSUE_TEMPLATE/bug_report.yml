@@ -1,0 +1,48 @@
+name: Bug report
+description: Report a reproducible Histories problem
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Do not attach real conversation histories, generated transcripts, databases, or credentials.
+  - type: input
+    id: version
+    attributes:
+      label: Histories version
+      placeholder: 0.1.0 or commit SHA
+    validations:
+      required: true
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version and Mac architecture
+      placeholder: macOS 15.5, Apple Silicon
+    validations:
+      required: true
+  - type: dropdown
+    id: source
+    attributes:
+      label: Affected source
+      options: [Codex, Pi, ChatGPT, Multiple sources, Not source-specific]
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+      description: Use synthetic or thoroughly scrubbed examples only.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true

@@ -3,6 +3,10 @@
 Histories is a local-first macOS desktop app and CLI for finding and reusing
 conversations from Codex, Pi, and ChatGPT.
 
+> **Public preview:** Histories is usable today, but the upstream conversation
+> formats are not stable APIs. Parser compatibility is maintained on a
+> best-effort basis with scrubbed regression fixtures.
+
 It is built for a simple recurring task: find the conversations you had recently,
 select the useful ones, and copy either their readable transcripts or their
 Markdown paths into another agent session.
@@ -18,12 +22,13 @@ Markdown paths into another agent session.
   draggable divider that remembers the preferred preview width.
 - Keeps selections while search and filters change, then copies all selected
   conversations as one chronological Markdown bundle.
-- Offers `clean` transcripts (user + agent messages) and `full` transcripts
-  (including tools, tool results, reasoning summaries, and system records).
+- Offers `clean` transcripts (user + agent messages) and on-demand `full`
+  transcripts (including tools, tool results, reasoning summaries, and system
+  records).
 - Copies a transcript, copies its generated Markdown path, or reveals it in
   Finder.
-- Refreshes changed source histories before CLI queries and every five seconds
-  while the desktop app is open.
+- Refreshes changed source histories before CLI queries, when the app regains
+  focus, and every 30 seconds while it remains visible.
 - Reads source histories without modifying them. SQLite and Markdown are derived
   data stored under the Histories app-data directory.
 
@@ -48,6 +53,9 @@ open ~/Applications/Histories.app
 
 If `~/.local/bin` is not already on `PATH`, either add it or run the CLI using
 its full path.
+
+The local installer builds from source. Downloadable releases, when available,
+are built for Apple Silicon and Intel, Developer ID signed, and notarized.
 
 ## CLI workflows
 
@@ -146,12 +154,17 @@ On this macOS setup the defaults are beneath:
 ├── config.json
 └── exports/
     ├── clean/{codex,pi,chatgpt}/YYYY-MM/*.md
-    └── full/{codex,pi,chatgpt}/YYYY-MM/*.full.md
+    └── full/{codex,pi,chatgpt}/YYYY-MM/*.full.md  # created on demand
 ```
 
 Set `HISTORIES_DATA_DIR` or pass the global `--data-dir` option to isolate a
 catalog. Set `HISTORIES_CHATGPT_EXPORT` to register one ChatGPT archive without a
 config file.
+
+The catalog and generated transcripts use private owner-only permissions on
+macOS. Full transcripts can contain sensitive tool output, so they are generated
+only when explicitly requested. See [PRIVACY.md](PRIVACY.md) for the complete
+local-data model.
 
 Token counts are intentionally approximate (`Unicode characters / 4`). They are
 for quickly comparing conversation size, not billing.
@@ -161,6 +174,8 @@ for quickly comparing conversation size, not billing.
 ```bash
 pnpm install
 cargo test --workspace
+cargo clippy --workspace --all-targets -- -D warnings
+pnpm test
 pnpm build
 pnpm tauri dev
 ```
@@ -175,3 +190,13 @@ cargo build --release -p histories-cli
 The architecture has one Rust core (`crates/histories-core`) shared by the Tauri
 desktop backend and `histories` CLI. Parsing, incremental refresh, Markdown
 generation, SQLite, and FTS behavior therefore stay identical across both surfaces.
+
+## Project policies
+
+- [Privacy and local data](PRIVACY.md)
+- [Security reporting](SECURITY.md)
+- [Contributing](CONTRIBUTING.md)
+- [Release process](docs/RELEASING.md)
+- [Changelog](CHANGELOG.md)
+
+Histories is available under the [MIT License](LICENSE).
