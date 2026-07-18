@@ -20,3 +20,8 @@ serde_json = "1.0"
 thiserror = "2.0"
 uuid = { version = "1.20", features = ["v4", "serde"] }
 walkdir = "2.5"
+
+# wayland-scanner 0.31.10 on crates.io pins vulnerable quick-xml 0.39.
+# Upstream has applied the 0.41 upgrade but has not published a new release yet.
+[patch.crates-io]
+wayland-scanner = { git = "https://github.com/Smithay/wayland-rs.git", rev = "a55c54b4e138e29181d63908ece06fd2a13550a0" }
