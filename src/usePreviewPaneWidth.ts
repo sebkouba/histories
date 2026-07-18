@@ -24,6 +24,7 @@ function initialWidth() {
 
 export function usePreviewPaneWidth() {
   const [maxWidth, setMaxWidth] = useState(availableMaxWidth);
+  const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
   const [width, setStoredWidth] = useState(initialWidth);
 
   const setWidth = useCallback((nextWidth: number) => {
@@ -33,6 +34,7 @@ export function usePreviewPaneWidth() {
   useEffect(() => {
     const fitToWindow = () => {
       const nextMaxWidth = availableMaxWidth();
+      setViewportWidth(window.innerWidth);
       setMaxWidth(nextMaxWidth);
       setStoredWidth((current) => clampWidth(current, nextMaxWidth));
     };
@@ -44,5 +46,11 @@ export function usePreviewPaneWidth() {
     window.localStorage.setItem(STORAGE_KEY, String(Math.round(width)));
   }, [width]);
 
-  return { maxWidth, minWidth: PREVIEW_MIN_WIDTH, setWidth, width };
+  return {
+    libraryWidth: viewportWidth - width,
+    maxWidth,
+    minWidth: PREVIEW_MIN_WIDTH,
+    setWidth,
+    width,
+  };
 }

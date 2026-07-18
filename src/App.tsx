@@ -236,9 +236,10 @@ export function App() {
 
   const visibleTokens = conversations.reduce((sum, conversation) => sum + (mode === "clean" ? conversation.approx_clean_tokens : conversation.approx_full_tokens), 0);
   const appStyle = { "--preview-width": `${previewPane.width}px` } as CSSProperties;
+  const compactLibrary = activeId !== null && previewPane.libraryWidth < 980;
 
   return (
-    <div className={`app-frame ${activeId !== null ? "preview-open" : ""}`} style={appStyle}>
+    <div className={`app-frame ${activeId !== null ? "preview-open" : ""} ${compactLibrary ? "compact-library" : ""}`} style={appStyle}>
       <header className="topbar">
         <div className="brand-block">
           <div className="brand-mark"><i /><i /><i /></div>
