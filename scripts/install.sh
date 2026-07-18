@@ -15,6 +15,7 @@ cargo build --release -p histories-cli
 
 mkdir -p "$app_install_dir" "$cli_install_dir"
 ditto "$project_dir/target/release/bundle/macos/Histories.app" "$app_install_dir/Histories.app"
+codesign --force --deep --sign - "$app_install_dir/Histories.app"
 install -m 755 "$project_dir/target/release/histories" "$cli_install_dir/histories"
 
 printf 'Installed Histories.app to %s\n' "$app_install_dir/Histories.app"

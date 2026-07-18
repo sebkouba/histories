@@ -28,7 +28,10 @@
     "active": true,
     "targets": ["app"],
     "category": "Productivity",
-    "shortDescription": "Browse and reuse local AI conversation histories"
+    "shortDescription": "Browse and reuse local AI conversation histories",
+    "macOS": {
+      "signingIdentity": "-",
+      "hardenedRuntime": false
+    }
   }
 }
-
