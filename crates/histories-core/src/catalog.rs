@@ -234,7 +234,10 @@ impl Catalog {
             values.push(Box::new(format!("%{cwd}%")));
         }
         if using_fts {
-            sql.push_str(" ORDER BY bm25(conversation_fts), c.started_at DESC");
+            // This tool is primarily for recalling recent work. Relevance still
+            // breaks ties, but an older keyword-dense coding session should not
+            // jump ahead of yesterday's conversation.
+            sql.push_str(" ORDER BY c.started_at DESC, bm25(conversation_fts)");
         } else {
             sql.push_str(" ORDER BY c.started_at DESC");
         }
