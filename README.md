@@ -1,5 +1,9 @@
 # Histories
 
+<p align="center">
+  <img src="src-tauri/app-icon.png" alt="Histories app icon" width="160">
+</p>
+
 Histories is a local-first macOS desktop app and CLI for finding and reusing
 conversations from Codex, Pi, and ChatGPT.
 
