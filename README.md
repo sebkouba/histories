@@ -15,6 +15,10 @@ It is built for a simple recurring task: find the conversations you had recently
 select the useful ones, and copy either their readable transcripts or their
 Markdown paths into another agent session.
 
+![Histories library showing synthetic Codex, Pi, and ChatGPT conversations](docs/images/histories-library.jpg)
+
+_Screenshot uses synthetic, scrubbed fixture data._
+
 ## What it does
 
 - Shows recent conversations grouped by day, with app, time, approximate token
