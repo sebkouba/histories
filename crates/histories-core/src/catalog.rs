@@ -1,7 +1,7 @@
-use crate::{ExportMode, HistoriesError, Result, SourceKind};
+use crate::{ExportMode, HistoriesError, Result, SourceKind, config::secure_file};
 use rusqlite::{Connection, OptionalExtension, ToSql, params, params_from_iter};
 use serde::{Deserialize, Serialize};
-use std::{fs, path::Path};
+use std::{fs, path::Path, time::Duration};
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
@@ -54,6 +54,7 @@ impl Catalog {
             })?;
         }
         let connection = Connection::open(path)?;
+        secure_file(path)?;
         Self::from_connection(connection)
     }
 
@@ -64,6 +65,7 @@ impl Catalog {
     fn from_connection(connection: Connection) -> Result<Self> {
         connection.pragma_update(None, "journal_mode", "WAL")?;
         connection.pragma_update(None, "foreign_keys", true)?;
+        connection.busy_timeout(Duration::from_secs(10))?;
         connection.execute_batch(SCHEMA)?;
         Ok(Self { connection })
     }
@@ -192,6 +194,16 @@ impl Catalog {
         Ok(deleted)
     }
 
+    pub fn all_export_paths(&self) -> Result<Vec<String>> {
+        let mut statement = self.connection.prepare(
+            "SELECT clean_markdown_path FROM conversations
+             UNION SELECT full_markdown_path FROM conversations",
+        )?;
+        Ok(statement
+            .query_map([], |row| row.get::<_, String>(0))?
+            .collect::<std::result::Result<Vec<_>, _>>()?)
+    }
+
     pub fn search(&self, request: &SearchRequest) -> Result<Vec<ConversationSummary>> {
         let query = request.query.as_deref().and_then(fts_query);
         let using_fts = query.is_some();
@@ -291,15 +303,14 @@ impl Catalog {
     }
 
     pub fn resolve_id(&self, reference: &str) -> Result<i64> {
-        if let Ok(id) = reference.parse::<i64>() {
-            if self
+        if let Ok(id) = reference.parse::<i64>()
+            && self
                 .connection
                 .query_row("SELECT 1 FROM conversations WHERE id=?1", [id], |_| Ok(()))
                 .optional()?
                 .is_some()
-            {
-                return Ok(id);
-            }
+        {
+            return Ok(id);
         }
         let pattern = format!("{reference}%");
         let mut statement = self.connection.prepare(

@@ -51,6 +51,7 @@ export type RefreshReport = {
 };
 
 export type AppPaths = {
+  home_dir: string;
   data_dir: string;
   database_path: string;
   exports_dir: string;
@@ -69,4 +70,3 @@ export type BootstrapResponse = {
   refresh: RefreshReport;
   conversations: ConversationSummary[];
 };
-

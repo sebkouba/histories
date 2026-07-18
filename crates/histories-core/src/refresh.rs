@@ -3,11 +3,13 @@ use crate::{
     SourceKind, config::atomic_write, parse_chatgpt_export, parse_codex, parse_pi, render_markdown,
 };
 use chrono::{DateTime, Datelike, Timelike};
+use fs2::FileExt;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fs,
+    fs::File,
     path::{Path, PathBuf},
     time::UNIX_EPOCH,
 };
@@ -51,6 +53,11 @@ impl Refresher {
     }
 
     pub fn refresh(&self) -> Result<RefreshReport> {
+        let _lock = RefreshLock::acquire(&self.paths.data_dir.join("refresh.lock"))?;
+        self.refresh_unlocked()
+    }
+
+    fn refresh_unlocked(&self) -> Result<RefreshReport> {
         let catalog = Catalog::open(&self.paths.database_path)?;
         let names = load_codex_names(&self.config.codex_roots);
         let mut report = RefreshReport::default();
@@ -70,7 +77,23 @@ impl Refresher {
             &mut report,
         )?;
         self.refresh_chatgpt(&catalog, &mut report)?;
+        self.prune_orphaned_exports(&catalog, &mut report)?;
         Ok(report)
+    }
+
+    pub fn documents(
+        &self,
+        ids: &[i64],
+        mode: ExportMode,
+    ) -> Result<Vec<crate::ConversationDocument>> {
+        let _lock = (mode == ExportMode::Full)
+            .then(|| RefreshLock::acquire(&self.paths.data_dir.join("refresh.lock")))
+            .transpose()?;
+        let catalog = Catalog::open(&self.paths.database_path)?;
+        if mode == ExportMode::Full {
+            self.ensure_full_exports(&catalog, ids)?;
+        }
+        catalog.documents(ids, mode)
     }
 
     fn refresh_jsonl_source<F>(
@@ -192,11 +215,15 @@ impl Refresher {
 
     fn store_conversation(&self, catalog: &Catalog, conversation: &Conversation) -> Result<()> {
         let clean_markdown = render_markdown(conversation, ExportMode::Clean);
-        let full_markdown = render_markdown(conversation, ExportMode::Full);
         let clean_path = export_path(&self.paths.exports_dir, conversation, ExportMode::Clean);
         let full_path = export_path(&self.paths.exports_dir, conversation, ExportMode::Full);
         atomic_write(&clean_path, clean_markdown.as_bytes())?;
-        atomic_write(&full_path, full_markdown.as_bytes())?;
+        if full_path.exists() {
+            fs::remove_file(&full_path).map_err(|source| HistoriesError::Io {
+                path: full_path.clone(),
+                source,
+            })?;
+        }
 
         let user_count = conversation
             .messages
@@ -226,6 +253,98 @@ impl Refresher {
             &clean_markdown,
         )?;
         Ok(())
+    }
+
+    fn ensure_full_exports(&self, catalog: &Catalog, ids: &[i64]) -> Result<()> {
+        let documents = catalog.documents(ids, ExportMode::Clean)?;
+        let names = load_codex_names(&self.config.codex_roots);
+        let mut chatgpt_cache = HashMap::<String, Vec<Conversation>>::new();
+
+        for document in documents {
+            let summary = document.summary;
+            let source_path = Path::new(&summary.source_path);
+            let conversation = match summary.source {
+                SourceKind::Codex => parse_codex(source_path, &names)?,
+                SourceKind::Pi => parse_pi(source_path)?,
+                SourceKind::Chatgpt => {
+                    if !chatgpt_cache.contains_key(&summary.source_path) {
+                        chatgpt_cache.insert(
+                            summary.source_path.clone(),
+                            parse_chatgpt_export(source_path)?,
+                        );
+                    }
+                    chatgpt_cache
+                        .get(&summary.source_path)
+                        .and_then(|conversations| {
+                            conversations
+                                .iter()
+                                .find(|conversation| {
+                                    conversation.external_id == summary.external_id
+                                })
+                                .cloned()
+                        })
+                }
+            }
+            .filter(|conversation| conversation.external_id == summary.external_id)
+            .ok_or_else(|| {
+                HistoriesError::Message(format!(
+                    "could not reconstruct {} conversation {} from {}",
+                    summary.source, summary.external_id, summary.source_path
+                ))
+            })?;
+            let markdown = render_markdown(&conversation, ExportMode::Full);
+            atomic_write(Path::new(&summary.full_markdown_path), markdown.as_bytes())?;
+        }
+        Ok(())
+    }
+
+    fn prune_orphaned_exports(&self, catalog: &Catalog, report: &mut RefreshReport) -> Result<()> {
+        let known = catalog
+            .all_export_paths()?
+            .into_iter()
+            .map(PathBuf::from)
+            .collect::<HashSet<_>>();
+        let mut entries = WalkDir::new(&self.paths.exports_dir)
+            .min_depth(1)
+            .contents_first(true)
+            .follow_links(false)
+            .into_iter()
+            .filter_map(std::result::Result::ok)
+            .collect::<Vec<_>>();
+        entries.sort_by_key(|entry| std::cmp::Reverse(entry.depth()));
+        for entry in entries {
+            let path = entry.path();
+            if entry.file_type().is_file() && !known.contains(path) {
+                if let Err(error) = fs::remove_file(path) {
+                    report.failures.push(RefreshFailure {
+                        path: path.display().to_string(),
+                        error: error.to_string(),
+                    });
+                }
+            } else if entry.file_type().is_dir() {
+                let _ = fs::remove_dir(path);
+            }
+        }
+        Ok(())
+    }
+}
+
+struct RefreshLock(File);
+
+impl RefreshLock {
+    fn acquire(path: &Path) -> Result<Self> {
+        let file = crate::config::private_file(path)?;
+        file.lock_exclusive().map_err(|source| HistoriesError::Io {
+            path: path.to_owned(),
+            source,
+        })?;
+        Ok(Self(file))
+    }
+}
+
+impl Drop for RefreshLock {
+    fn drop(&mut self) {
+        let _ = self.0.unlock();
     }
 }
 
@@ -352,6 +471,37 @@ fn sanitize_component(value: &str) -> String {
 mod tests {
     use super::*;
 
+    fn fixture_refresher() -> (tempfile::TempDir, Refresher, PathBuf) {
+        let temporary = tempfile::tempdir().unwrap();
+        let source_root = temporary.path().join("codex");
+        fs::create_dir_all(&source_root).unwrap();
+        let source_path = source_root.join("session.jsonl");
+        let records = [
+            serde_json::json!({"type":"session_meta","timestamp":"2026-07-01T10:00:00Z","payload":{"id":"session-1","cwd":"/tmp/project"}}),
+            serde_json::json!({"type":"event_msg","timestamp":"2026-07-01T10:00:01Z","payload":{"type":"user_message","message":"Private question"}}),
+            serde_json::json!({"type":"response_item","timestamp":"2026-07-01T10:00:02Z","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Private answer"}]}}),
+            serde_json::json!({"type":"response_item","timestamp":"2026-07-01T10:00:03Z","payload":{"type":"custom_tool_call_output","output":"sensitive tool output"}}),
+        ];
+        fs::write(
+            &source_path,
+            records
+                .iter()
+                .map(|record| record.to_string())
+                .collect::<Vec<_>>()
+                .join("\n")
+                + "\n",
+        )
+        .unwrap();
+        let paths = AppPaths::discover(Some(temporary.path().join("data"))).unwrap();
+        let config = SourceConfig {
+            codex_roots: vec![source_root],
+            pi_roots: Vec::new(),
+            chatgpt_exports: Vec::new(),
+        };
+        let refresher = Refresher { paths, config };
+        (temporary, refresher, source_path)
+    }
+
     #[test]
     fn export_paths_are_stable_and_separate_modes() {
         let conversation = Conversation {
@@ -372,6 +522,60 @@ mod tests {
         assert_eq!(
             export_path(root, &conversation, ExportMode::Full),
             Path::new("/tmp/exports/full/pi/2026-07/2026-07-01_1022_abc-123.full.md")
+        );
+    }
+
+    #[test]
+    fn full_transcripts_are_generated_only_when_requested() {
+        let (_temporary, refresher, _source_path) = fixture_refresher();
+        refresher.refresh().unwrap();
+        let catalog = Catalog::open(&refresher.paths.database_path).unwrap();
+        let summary = catalog
+            .search(&crate::SearchRequest {
+                limit: 10,
+                ..Default::default()
+            })
+            .unwrap()
+            .remove(0);
+
+        assert!(Path::new(&summary.clean_markdown_path).exists());
+        assert!(!Path::new(&summary.full_markdown_path).exists());
+
+        let documents = refresher
+            .documents(&[summary.id], ExportMode::Full)
+            .unwrap();
+        assert!(documents[0].markdown.contains("sensitive tool output"));
+        assert!(Path::new(&summary.full_markdown_path).exists());
+    }
+
+    #[test]
+    fn removed_conversations_delete_all_derived_exports() {
+        let (_temporary, refresher, source_path) = fixture_refresher();
+        refresher.refresh().unwrap();
+        let catalog = Catalog::open(&refresher.paths.database_path).unwrap();
+        let summary = catalog
+            .search(&crate::SearchRequest {
+                limit: 10,
+                ..Default::default()
+            })
+            .unwrap()
+            .remove(0);
+        refresher
+            .documents(&[summary.id], ExportMode::Full)
+            .unwrap();
+
+        fs::remove_file(source_path).unwrap();
+        let report = refresher.refresh().unwrap();
+
+        assert_eq!(report.removed, 1);
+        assert!(!Path::new(&summary.clean_markdown_path).exists());
+        assert!(!Path::new(&summary.full_markdown_path).exists());
+        assert_eq!(
+            Catalog::open(&refresher.paths.database_path)
+                .unwrap()
+                .count()
+                .unwrap(),
+            0
         );
     }
 }

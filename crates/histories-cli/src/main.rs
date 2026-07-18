@@ -196,7 +196,8 @@ fn main() -> Result<()> {
             let paths = prepare(data_dir, skip_refresh, true)?;
             let catalog = Catalog::open(&paths.database_path)?;
             let id = catalog.resolve_id(&reference)?;
-            let mut documents = catalog.documents(&[id], mode.into())?;
+            let refresher = Refresher::discover(Some(paths.data_dir.clone()))?;
+            let mut documents = refresher.documents(&[id], mode.into())?;
             let document = documents.pop().context("conversation not found")?;
             if path {
                 println!(
@@ -235,7 +236,8 @@ fn main() -> Result<()> {
                 bail!("no conversations matched; no file was written");
             }
             let mode = mode.into();
-            let documents = catalog.documents(&ids, mode)?;
+            let refresher = Refresher::discover(Some(paths.data_dir.clone()))?;
+            let documents = refresher.documents(&ids, mode)?;
             let bundle = document_bundle(&documents, mode);
             if let Some(parent) = output
                 .parent()

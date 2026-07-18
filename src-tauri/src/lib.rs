@@ -76,9 +76,8 @@ async fn get_documents(
 ) -> Result<Vec<ConversationDocument>, String> {
     let data_dir = state.data_dir.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        let paths = AppPaths::discover(data_dir).map_err(error_string)?;
-        Catalog::open(&paths.database_path)
-            .and_then(|catalog| catalog.documents(&ids, mode))
+        Refresher::discover(data_dir)
+            .and_then(|refresher| refresher.documents(&ids, mode))
             .map_err(error_string)
     })
     .await
