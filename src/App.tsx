@@ -379,7 +379,7 @@ export function App() {
                 <span>·</span>
                 <span>~{humanTokens(mode === "clean" ? preview.approx_clean_tokens : preview.approx_full_tokens)} tokens</span>
               </div>
-              <pre>{preview.markdown}</pre>
+              <HighlightedMarkdown markdown={preview.markdown} query={query} />
               <div className="preview-actions">
                 <button className="button subtle" onClick={() => void copyPath(preview)}><PathIcon /> Copy path</button>
                 <button className="button primary" onClick={() => void copyDocuments([preview.id])}><CopyIcon /> Copy transcript</button>
@@ -409,6 +409,48 @@ function LoadingState({ compact = false }: { compact?: boolean }) {
 
 function EmptyState({ title, detail }: { title: string; detail: string }) {
   return <div className="empty-state"><div className="empty-glyph"><i /><i /><i /></div><h2>{title}</h2><p>{detail}</p></div>;
+}
+
+function HighlightedMarkdown({ markdown, query }: { markdown: string; query: string }) {
+  const content = useRef<HTMLPreElement>(null);
+  const terms = useMemo(() => searchTerms(query), [query]);
+  const matcher = useMemo(() => terms.length
+    ? new RegExp(`(${terms.map(escapeRegExp).join("|")})`, "giu")
+    : null, [terms]);
+  const parts = useMemo(() => matcher ? markdown.split(matcher) : [markdown], [markdown, matcher]);
+
+  useEffect(() => {
+    const container = content.current;
+    if (!container) return;
+    const frame = window.requestAnimationFrame(() => {
+      const firstMatch = container.querySelector<HTMLElement>("[data-search-match]");
+      container.scrollTop = firstMatch
+        ? Math.max(0, firstMatch.offsetTop - container.clientHeight * 0.3)
+        : 0;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [markdown, matcher]);
+
+  return (
+    <pre ref={content}>
+      {parts.map((part, index) => index % 2
+        ? <mark data-search-match key={index}>{part}</mark>
+        : part)}
+    </pre>
+  );
+}
+
+function searchTerms(query: string) {
+  const operators = new Set(["and", "or", "not", "near"]);
+  const terms = [...query.matchAll(/"([^"]+)"|([\p{L}\p{N}][\p{L}\p{N}_'-]*)/gu)]
+    .map((match) => (match[1] ?? match[2]).trim())
+    .filter((term) => term && !operators.has(term.toLocaleLowerCase()));
+  return [...new Map(terms.map((term) => [term.toLocaleLowerCase(), term])).values()]
+    .sort((left, right) => right.length - left.length);
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function groupByDay(conversations: ConversationSummary[]): Array<[string, ConversationSummary[]]> {

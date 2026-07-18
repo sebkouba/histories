@@ -12,6 +12,8 @@ Markdown paths into another agent session.
 - Shows recent conversations grouped by day, with app, time, approximate token
   length, message counts, and working directory.
 - Full-text searches user and assistant messages with SQLite FTS5.
+- Highlights search terms in conversation previews and scrolls to the first
+  match automatically.
 - Keeps selections while search and filters change, then copies all selected
   conversations as one chronological Markdown bundle.
 - Offers `clean` transcripts (user + agent messages) and `full` transcripts
@@ -171,4 +173,3 @@ cargo build --release -p histories-cli
 The architecture has one Rust core (`crates/histories-core`) shared by the Tauri
 desktop backend and `histories` CLI. Parsing, incremental refresh, Markdown
 generation, SQLite, and FTS behavior therefore stay identical across both surfaces.
-
