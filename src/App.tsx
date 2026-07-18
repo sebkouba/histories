@@ -19,6 +19,7 @@ import type {
   AppPaths,
   BootstrapResponse,
   ConversationDocument,
+  ConversationOrder,
   ConversationSummary,
   ExportMode,
   RefreshReport,
@@ -49,6 +50,7 @@ export function App() {
   const [query, setQuery] = useState("");
   const [rangeDays, setRangeDays] = useState(30);
   const [sources, setSources] = useState<SourceKind[]>([]);
+  const [sortBy, setSortBy] = useState<ConversationOrder>("started_at");
   const [mode, setMode] = useState<ExportMode>("clean");
   const [selected, setSelected] = useState<Record<number, ConversationSummary>>({});
   const [activeId, setActiveId] = useState<number | null>(null);
@@ -72,9 +74,10 @@ export function App() {
     since: rangeDays ? new Date(Date.now() - rangeDays * 86_400_000).toISOString() : null,
     until: null,
     cwd: null,
+    sort_by: sortBy,
     limit: 400,
     offset: 0,
-  }), [query, rangeDays, sources]);
+  }), [query, rangeDays, sortBy, sources]);
 
   const runSearch = useCallback(async (nextRequest = request) => {
     const generation = ++searchGeneration.current;
@@ -179,7 +182,7 @@ export function App() {
   }, []);
 
   const selectedItems = Object.values(selected);
-  const grouped = useMemo(() => groupByDay(conversations), [conversations]);
+  const grouped = useMemo(() => groupByDay(conversations, sortBy), [conversations, sortBy]);
 
   function showToast(message: string) {
     setToast(message);
@@ -338,6 +341,13 @@ export function App() {
                 ))}
               </div>
             </div>
+            <div className="filter-cluster">
+              <span className="filter-label">Order by</span>
+              <div className="segmented">
+                <button className={sortBy === "started_at" ? "active" : ""} onClick={() => setSortBy("started_at")}>Start</button>
+                <button className={sortBy === "updated_at" ? "active" : ""} onClick={() => setSortBy("updated_at")}>Last message</button>
+              </div>
+            </div>
             <div className="mode-control">
               <span className="filter-label">Transcript</span>
               <div className="segmented mode">
@@ -375,7 +385,7 @@ export function App() {
             {grouped.map(([day, items]) => (
               <section className="day-group" key={day}>
                 <header><h2>{dayLabel(day)}</h2><span>{longDate(day)} · {items.length}</span></header>
-                <div className="list-head"><span /><span>Time</span><span>Conversation</span><span>Length</span><span>Working directory</span><span>Actions</span></div>
+                <div className="list-head"><span /><span>{sortBy === "started_at" ? "Started" : "Last message"}</span><span>Conversation</span><span>Length</span><span>Working directory</span><span>Actions</span></div>
                 <div className="conversation-list">
                   {items.map((conversation) => (
                     <article className={`conversation-row ${selected[conversation.id] ? "selected" : ""}`} key={conversation.id}>
@@ -383,7 +393,7 @@ export function App() {
                         <input type="checkbox" checked={Boolean(selected[conversation.id])} onChange={() => toggleSelected(conversation)} />
                         <span />
                       </label>
-                      <time dateTime={conversation.started_at}>{timeLabel(conversation.started_at)}</time>
+                      <time dateTime={conversationTimestamp(conversation, sortBy)}>{timeLabel(conversationTimestamp(conversation, sortBy))}</time>
                       <button className="conversation-title" onClick={() => setActiveId(conversation.id)}>
                         <span className="title-line"><SourceMark source={conversation.source} /><strong>{conversation.title}</strong></span>
                         <span className="message-count">{conversation.user_message_count} user · {conversation.assistant_message_count} agent messages</span>
@@ -430,7 +440,7 @@ export function App() {
                 <SourceMark source={preview.source} />
                 <span>{SOURCE_LABELS[preview.source]}</span>
                 <span>·</span>
-                <span>{formatDateTime(preview.started_at)}</span>
+                <span>{sortBy === "started_at" ? "Started" : "Last message"} {formatDateTime(conversationTimestamp(preview, sortBy))}</span>
                 <span>·</span>
                 <span>~{humanTokens(mode === "clean" ? preview.approx_clean_tokens : preview.approx_full_tokens)} tokens</span>
               </div>
@@ -512,10 +522,14 @@ function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function groupByDay(conversations: ConversationSummary[]): Array<[string, ConversationSummary[]]> {
+export function conversationTimestamp(conversation: ConversationSummary, sortBy: ConversationOrder) {
+  return sortBy === "updated_at" ? conversation.updated_at : conversation.started_at;
+}
+
+export function groupByDay(conversations: ConversationSummary[], sortBy: ConversationOrder): Array<[string, ConversationSummary[]]> {
   const groups = new Map<string, ConversationSummary[]>();
   for (const conversation of conversations) {
-    const date = safeDate(conversation.started_at);
+    const date = safeDate(conversationTimestamp(conversation, sortBy));
     const key = date ? localDayKey(date) : "unknown";
     const current = groups.get(key) ?? [];
     current.push(conversation);

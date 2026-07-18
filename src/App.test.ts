@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ConversationDocument } from "./types";
-import { bundleDocuments, searchTerms, shortPath } from "./App";
+import { bundleDocuments, conversationTimestamp, groupByDay, searchTerms, shortPath } from "./App";
 
 function document(id: number, startedAt: string, markdown: string): ConversationDocument {
   return {
@@ -22,6 +22,20 @@ function document(id: number, startedAt: string, markdown: string): Conversation
     markdown,
   };
 }
+
+describe("conversation ordering dates", () => {
+  it("switches timestamps and day groups between start and last message", () => {
+    const conversation = {
+      ...document(1, "2026-07-01T10:00:00Z", "# One\n"),
+      updated_at: "2026-07-03T12:00:00Z",
+    };
+
+    expect(conversationTimestamp(conversation, "started_at")).toBe("2026-07-01T10:00:00Z");
+    expect(conversationTimestamp(conversation, "updated_at")).toBe("2026-07-03T12:00:00Z");
+    expect(groupByDay([conversation], "started_at")[0][0]).toBe("2026-07-01");
+    expect(groupByDay([conversation], "updated_at")[0][0]).toBe("2026-07-03");
+  });
+});
 
 describe("searchTerms", () => {
   it("keeps phrases, removes operators, and deduplicates case-insensitively", () => {

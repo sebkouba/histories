@@ -3,6 +3,14 @@ use rusqlite::{Connection, OptionalExtension, ToSql, params, params_from_iter};
 use serde::{Deserialize, Serialize};
 use std::{fs, path::Path, time::Duration};
 
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ConversationOrder {
+    #[default]
+    StartedAt,
+    UpdatedAt,
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct SearchRequest {
@@ -11,6 +19,7 @@ pub struct SearchRequest {
     pub since: Option<String>,
     pub until: Option<String>,
     pub cwd: Option<String>,
+    pub sort_by: ConversationOrder,
     pub limit: usize,
     pub offset: usize,
 }
@@ -245,13 +254,19 @@ impl Catalog {
             sql.push_str(" AND c.cwd LIKE ?");
             values.push(Box::new(format!("%{cwd}%")));
         }
+        let order_column = match request.sort_by {
+            ConversationOrder::StartedAt => "c.started_at",
+            ConversationOrder::UpdatedAt => "c.updated_at",
+        };
         if using_fts {
             // This tool is primarily for recalling recent work. Relevance still
             // breaks ties, but an older keyword-dense coding session should not
             // jump ahead of yesterday's conversation.
-            sql.push_str(" ORDER BY c.started_at DESC, bm25(conversation_fts)");
+            sql.push_str(&format!(
+                " ORDER BY {order_column} DESC, bm25(conversation_fts)"
+            ));
         } else {
-            sql.push_str(" ORDER BY c.started_at DESC");
+            sql.push_str(&format!(" ORDER BY {order_column} DESC"));
         }
         sql.push_str(" LIMIT ? OFFSET ?");
         values.push(Box::new(request.limit.clamp(1, 1000) as i64));
@@ -406,6 +421,7 @@ CREATE TABLE IF NOT EXISTS conversations (
     UNIQUE(source, external_id)
 );
 CREATE INDEX IF NOT EXISTS conversations_started_at ON conversations(started_at DESC);
+CREATE INDEX IF NOT EXISTS conversations_updated_at ON conversations(updated_at DESC);
 CREATE INDEX IF NOT EXISTS conversations_source ON conversations(source);
 CREATE TABLE IF NOT EXISTS source_files (
     path TEXT PRIMARY KEY,
@@ -498,6 +514,54 @@ mod tests {
             .unwrap();
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].external_id, "one");
+    }
+
+    #[test]
+    fn search_can_order_by_last_message() {
+        let catalog = Catalog::in_memory().unwrap();
+        catalog
+            .upsert_conversation(
+                SourceKind::Codex,
+                "older-active",
+                "/tmp/older-active",
+                "Older active session",
+                Some("/tmp/project"),
+                "2026-07-01T10:00:00Z",
+                "2026-07-03T10:00:00Z",
+                10,
+                20,
+                2,
+                1,
+                1,
+                "/tmp/older-active.md",
+                "/tmp/older-active.full.md",
+                "continued later",
+            )
+            .unwrap();
+        insert(
+            &catalog,
+            "newer-finished",
+            "Newer finished session",
+            "finished immediately",
+            "2026-07-02T10:00:00Z",
+        );
+
+        let by_start = catalog
+            .search(&SearchRequest {
+                limit: 50,
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(by_start[0].external_id, "newer-finished");
+
+        let by_last_message = catalog
+            .search(&SearchRequest {
+                sort_by: ConversationOrder::UpdatedAt,
+                limit: 50,
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(by_last_message[0].external_id, "older-active");
     }
 
     #[test]

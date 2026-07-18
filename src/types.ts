@@ -1,5 +1,6 @@
 export type SourceKind = "codex" | "pi" | "chatgpt";
 export type ExportMode = "clean" | "full";
+export type ConversationOrder = "started_at" | "updated_at";
 
 export type SearchRequest = {
   query: string | null;
@@ -7,6 +8,7 @@ export type SearchRequest = {
   since: string | null;
   until: string | null;
   cwd: string | null;
+  sort_by: ConversationOrder;
   limit: number;
   offset: number;
 };

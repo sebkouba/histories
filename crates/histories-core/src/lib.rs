@@ -6,7 +6,9 @@ pub mod model;
 pub mod parser;
 pub mod refresh;
 
-pub use catalog::{Catalog, ConversationDocument, ConversationSummary, SearchRequest};
+pub use catalog::{
+    Catalog, ConversationDocument, ConversationOrder, ConversationSummary, SearchRequest,
+};
 pub use config::{AppPaths, SourceConfig};
 pub use error::{HistoriesError, Result};
 pub use markdown::{ExportMode, render_bundle, render_markdown};

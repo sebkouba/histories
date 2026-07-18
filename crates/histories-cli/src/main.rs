@@ -356,6 +356,7 @@ fn request(query: Option<String>, filters: Filters) -> Result<SearchRequest> {
         since: filters.since.as_deref().map(parse_bound).transpose()?,
         until: filters.until.as_deref().map(parse_bound).transpose()?,
         cwd: filters.cwd,
+        sort_by: Default::default(),
         limit: filters.limit,
         offset: 0,
     })
