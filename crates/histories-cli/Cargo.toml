@@ -1,0 +1,15 @@
+[package]
+name = "histories-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "histories"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+histories-core = { path = "../histories-core" }
+
