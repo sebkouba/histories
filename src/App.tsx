@@ -58,6 +58,7 @@ export function App() {
   const [toast, setToast] = useState<string | null>(null);
   const searchGeneration = useRef(0);
   const refreshInFlight = useRef(false);
+  const searchInput = useRef<HTMLInputElement>(null);
 
   const request = useMemo<SearchRequest>(() => ({
     query: query.trim() || null,
@@ -148,6 +149,18 @@ export function App() {
     const close = (event: KeyboardEvent) => event.key === "Escape" && setActiveId(null);
     window.addEventListener("keydown", close);
     return () => window.removeEventListener("keydown", close);
+  }, []);
+
+  useEffect(() => {
+    const focusSearch = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        searchInput.current?.focus();
+        searchInput.current?.select();
+      }
+    };
+    window.addEventListener("keydown", focusSearch);
+    return () => window.removeEventListener("keydown", focusSearch);
   }, []);
 
   const selectedItems = Object.values(selected);
@@ -249,6 +262,7 @@ export function App() {
               autoFocus
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Search every user and agent message…"
+              ref={searchInput}
               spellCheck={false}
               value={query}
             />
@@ -463,4 +477,3 @@ function bundleDocuments(documents: ConversationDocument[], mode: ExportMode) {
   if (documents.length === 1) return documents[0].markdown;
   return `# Conversation history bundle\n\nSessions: ${documents.length}\nMode: ${mode}\n\n${documents.map((document) => document.markdown).join("\n---\n\n")}`;
 }
-

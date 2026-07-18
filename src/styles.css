@@ -26,6 +26,9 @@ button:focus-visible, input:focus-visible { outline: 2px solid rgba(180, 84, 47,
 
 .app-frame { min-height: 100vh; background: var(--surface); transition: padding-right 180ms ease; }
 .app-frame.preview-open { padding-right: 510px; }
+.preview-open .freshness { display: none; }
+.preview-open .topbar { padding-right: 22px; }
+.preview-open .brand-block p { display: none; }
 
 .topbar {
   position: sticky;
