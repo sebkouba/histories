@@ -241,6 +241,8 @@ impl Refresher {
             &conversation.source_path,
             &conversation.title,
             conversation.cwd.as_deref(),
+            conversation.started_via.as_deref(),
+            &conversation.models,
             &conversation.started_at,
             &conversation.updated_at,
             conversation.approximate_tokens(true),
@@ -477,7 +479,8 @@ mod tests {
         fs::create_dir_all(&source_root).unwrap();
         let source_path = source_root.join("session.jsonl");
         let records = [
-            serde_json::json!({"type":"session_meta","timestamp":"2026-07-01T10:00:00Z","payload":{"id":"session-1","cwd":"/tmp/project"}}),
+            serde_json::json!({"type":"session_meta","timestamp":"2026-07-01T10:00:00Z","payload":{"id":"session-1","cwd":"/tmp/project","originator":"Codex Desktop","source":"vscode"}}),
+            serde_json::json!({"type":"turn_context","timestamp":"2026-07-01T10:00:00Z","payload":{"model":"gpt-5.6-sol"}}),
             serde_json::json!({"type":"event_msg","timestamp":"2026-07-01T10:00:01Z","payload":{"type":"user_message","message":"Private question"}}),
             serde_json::json!({"type":"response_item","timestamp":"2026-07-01T10:00:02Z","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Private answer"}]}}),
             serde_json::json!({"type":"response_item","timestamp":"2026-07-01T10:00:03Z","payload":{"type":"custom_tool_call_output","output":"sensitive tool output"}}),
@@ -510,6 +513,8 @@ mod tests {
             source_path: "/tmp/source".to_owned(),
             title: "Title".to_owned(),
             cwd: None,
+            started_via: Some("pi".to_owned()),
+            models: vec!["claude-opus-4.8".to_owned()],
             started_at: "2026-07-01T10:22:00Z".to_owned(),
             updated_at: "2026-07-01T10:23:00Z".to_owned(),
             messages: Vec::new(),
@@ -540,6 +545,8 @@ mod tests {
 
         assert!(Path::new(&summary.clean_markdown_path).exists());
         assert!(!Path::new(&summary.full_markdown_path).exists());
+        assert_eq!(summary.started_via.as_deref(), Some("Codex Desktop"));
+        assert_eq!(summary.models, ["gpt-5.6-sol"]);
 
         let documents = refresher
             .documents(&[summary.id], ExportMode::Full)

@@ -11,7 +11,7 @@ use std::{
     path::Path,
 };
 
-use super::{ParseError, content_text, end_timestamp, first_line, string};
+use super::{ParseError, content_text, end_timestamp, first_line, push_unique, string};
 
 pub fn parse_chatgpt_export(path: &Path) -> Result<Vec<Conversation>, ParseError> {
     let file = File::open(path).map_err(|source| ParseError::Io {
@@ -96,6 +96,7 @@ fn parse_conversation(path: &Path, entry: &Value) -> Option<Conversation> {
     path_ids.reverse();
 
     let mut messages = Vec::new();
+    let mut models = Vec::new();
     for id in path_ids {
         let node = nodes.get(&id)?;
         let Some(message) = node.get("message").filter(|message| !message.is_null()) else {
@@ -117,6 +118,16 @@ fn parse_conversation(path: &Path, entry: &Value) -> Option<Conversation> {
             "system" => MessageKind::System,
             _ => MessageKind::Other,
         };
+        if role == "assistant" {
+            push_unique(
+                &mut models,
+                string(
+                    message
+                        .get("metadata")
+                        .and_then(|metadata| metadata.get("model_slug")),
+                ),
+            );
+        }
         messages.push(Message {
             sequence: messages.len(),
             kind,
@@ -153,6 +164,9 @@ fn parse_conversation(path: &Path, entry: &Value) -> Option<Conversation> {
                 .map(|message| first_line(&message.content))
         })
         .unwrap_or_else(|| "ChatGPT conversation".to_owned());
+    if models.is_empty() {
+        push_unique(&mut models, string(entry.get("default_model_slug")));
+    }
 
     Some(Conversation {
         source: SourceKind::Chatgpt,
@@ -160,6 +174,8 @@ fn parse_conversation(path: &Path, entry: &Value) -> Option<Conversation> {
         source_path: path.display().to_string(),
         title,
         cwd: None,
+        started_via: None,
+        models,
         started_at,
         updated_at,
         messages,
@@ -206,7 +222,7 @@ mod tests {
                 "root":{"id":"root","message":null,"parent":null,"children":["u1"]},
                 "u1":{"id":"u1","message":{"author":{"role":"user"},"create_time":1782896401.0,"content":{"content_type":"text","parts":["Question"]}},"parent":"root","children":["a-old","a-new"]},
                 "a-old":{"id":"a-old","message":{"author":{"role":"assistant"},"create_time":1782896402.0,"content":{"content_type":"text","parts":["Old answer"]}},"parent":"u1","children":[]},
-                "a-new":{"id":"a-new","message":{"author":{"role":"assistant"},"create_time":1782896403.0,"content":{"content_type":"text","parts":["New answer"]}},"parent":"u1","children":[]}
+                "a-new":{"id":"a-new","message":{"author":{"role":"assistant"},"create_time":1782896403.0,"content":{"content_type":"text","parts":["New answer"]},"metadata":{"model_slug":"gpt-5.6"}},"parent":"u1","children":[]}
             }
         }]);
         write!(file, "{export}").unwrap();
@@ -214,6 +230,7 @@ mod tests {
         let conversations = parse_chatgpt_export(file.path()).unwrap();
         assert_eq!(conversations.len(), 1);
         assert_eq!(conversations[0].title, "A useful chat");
+        assert_eq!(conversations[0].models, ["gpt-5.6"]);
         assert_eq!(
             conversations[0]
                 .clean_messages()

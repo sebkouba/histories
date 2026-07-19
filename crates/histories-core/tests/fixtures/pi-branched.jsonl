@@ -1,4 +1,5 @@
 {"type":"session","id":"fixture-pi","timestamp":"2026-07-01T10:00:00Z","cwd":"/tmp/example-project"}
-{"type":"message","id":"u1","parentId":null,"timestamp":"2026-07-01T10:00:01Z","message":{"role":"user","content":[{"type":"text","text":"Choose a branch"}]}}
+{"type":"model_change","id":"m1","parentId":null,"timestamp":"2026-07-01T10:00:00Z","provider":"anthropic","modelId":"claude-opus-4.8"}
+{"type":"message","id":"u1","parentId":"m1","timestamp":"2026-07-01T10:00:01Z","message":{"role":"user","content":[{"type":"text","text":"Choose a branch"}]}}
 {"type":"message","id":"a-old","parentId":"u1","timestamp":"2026-07-01T10:00:02Z","message":{"role":"assistant","content":[{"type":"text","text":"Abandoned answer"}]}}
 {"type":"message","id":"a-new","parentId":"u1","timestamp":"2026-07-01T10:00:03Z","message":{"role":"assistant","content":[{"type":"thinking","thinking":"Compare the branches"},{"type":"text","text":"Active answer"}]}}

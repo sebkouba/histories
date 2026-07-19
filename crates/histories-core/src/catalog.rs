@@ -31,6 +31,8 @@ pub struct ConversationSummary {
     pub external_id: String,
     pub title: String,
     pub cwd: Option<String>,
+    pub started_via: Option<String>,
+    pub models: Vec<String>,
     pub started_at: String,
     pub updated_at: String,
     pub approx_clean_tokens: usize,
@@ -76,6 +78,22 @@ impl Catalog {
         connection.pragma_update(None, "foreign_keys", true)?;
         connection.busy_timeout(Duration::from_secs(10))?;
         connection.execute_batch(SCHEMA)?;
+        let metadata_columns_added = ensure_column(
+            &connection,
+            "conversations",
+            "started_via",
+            "started_via TEXT",
+        )? | ensure_column(
+            &connection,
+            "conversations",
+            "models_json",
+            "models_json TEXT NOT NULL DEFAULT '[]'",
+        )?;
+        if metadata_columns_added {
+            // Source files themselves are authoritative. Invalidating their fingerprints
+            // makes the next refresh populate metadata for already-cataloged conversations.
+            connection.execute("DELETE FROM source_files", [])?;
+        }
         Ok(Self { connection })
     }
 
@@ -87,6 +105,8 @@ impl Catalog {
         source_path: &str,
         title: &str,
         cwd: Option<&str>,
+        started_via: Option<&str>,
+        models: &[String],
         started_at: &str,
         updated_at: &str,
         approx_clean_tokens: usize,
@@ -98,15 +118,18 @@ impl Catalog {
         full_markdown_path: &str,
         clean_markdown: &str,
     ) -> Result<i64> {
+        let models_json = serde_json::to_string(models)?;
         self.connection.execute(
             "INSERT INTO conversations (
-                source, external_id, source_path, title, cwd, started_at, updated_at,
+                source, external_id, source_path, title, cwd, started_via, models_json,
+                started_at, updated_at,
                 approx_clean_tokens, approx_full_tokens, message_count,
                 user_message_count, assistant_message_count, clean_markdown_path,
                 full_markdown_path, clean_markdown
-             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)
              ON CONFLICT(source, external_id) DO UPDATE SET
                 source_path=excluded.source_path, title=excluded.title, cwd=excluded.cwd,
+                started_via=excluded.started_via, models_json=excluded.models_json,
                 started_at=excluded.started_at, updated_at=excluded.updated_at,
                 approx_clean_tokens=excluded.approx_clean_tokens,
                 approx_full_tokens=excluded.approx_full_tokens,
@@ -122,6 +145,8 @@ impl Catalog {
                 source_path,
                 title,
                 cwd,
+                started_via,
+                models_json,
                 started_at,
                 updated_at,
                 approx_clean_tokens as i64,
@@ -296,7 +321,7 @@ impl Catalog {
         let mut statement = self.connection.prepare(&sql)?;
         let rows = statement.query_map(params_from_iter(ids.iter()), |row| {
             let summary = map_summary(row)?;
-            let clean_markdown: String = row.get(16)?;
+            let clean_markdown: String = row.get(17)?;
             Ok((summary, clean_markdown))
         })?;
         rows.map(|row| {
@@ -368,6 +393,8 @@ fn map_summary(row: &rusqlite::Row<'_>) -> rusqlite::Result<ConversationSummary>
         external_id: row.get(2)?,
         title: row.get(3)?,
         cwd: row.get(4)?,
+        started_via: row.get(15)?,
+        models: serde_json::from_str(&row.get::<_, String>(16)?).unwrap_or_default(),
         started_at: row.get(5)?,
         updated_at: row.get(6)?,
         approx_clean_tokens: row.get::<_, i64>(7)? as usize,
@@ -398,7 +425,7 @@ fn fts_query(query: &str) -> Option<String> {
 const SUMMARY_SELECT: &str = "SELECT c.id, c.source, c.external_id, c.title, c.cwd,
     c.started_at, c.updated_at, c.approx_clean_tokens, c.approx_full_tokens,
     c.message_count, c.user_message_count, c.assistant_message_count,
-    c.clean_markdown_path, c.full_markdown_path, c.source_path, c.clean_markdown";
+    c.clean_markdown_path, c.full_markdown_path, c.source_path, c.started_via, c.models_json";
 
 const SCHEMA: &str = "
 CREATE TABLE IF NOT EXISTS conversations (
@@ -408,6 +435,8 @@ CREATE TABLE IF NOT EXISTS conversations (
     source_path TEXT NOT NULL,
     title TEXT NOT NULL,
     cwd TEXT,
+    started_via TEXT,
+    models_json TEXT NOT NULL DEFAULT '[]',
     started_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     approx_clean_tokens INTEGER NOT NULL,
@@ -450,6 +479,23 @@ CREATE TRIGGER IF NOT EXISTS conversations_au AFTER UPDATE ON conversations BEGI
 END;
 ";
 
+fn ensure_column(
+    connection: &Connection,
+    table: &str,
+    column: &str,
+    definition: &str,
+) -> Result<bool> {
+    let mut statement = connection.prepare(&format!("PRAGMA table_info({table})"))?;
+    let columns = statement
+        .query_map([], |row| row.get::<_, String>(1))?
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+    if columns.iter().any(|existing| existing == column) {
+        return Ok(false);
+    }
+    connection.execute(&format!("ALTER TABLE {table} ADD COLUMN {definition}"), [])?;
+    Ok(true)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -462,6 +508,8 @@ mod tests {
                 "/tmp/source",
                 title,
                 Some("/tmp/project"),
+                Some("codex"),
+                &["gpt-5.6-sol".to_owned()],
                 date,
                 date,
                 10,
@@ -526,6 +574,8 @@ mod tests {
                 "/tmp/older-active",
                 "Older active session",
                 Some("/tmp/project"),
+                Some("codex"),
+                &["gpt-5.6-sol".to_owned()],
                 "2026-07-01T10:00:00Z",
                 "2026-07-03T10:00:00Z",
                 10,

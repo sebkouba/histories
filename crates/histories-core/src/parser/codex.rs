@@ -3,8 +3,8 @@ use serde_json::Value;
 use std::{collections::HashMap, path::Path};
 
 use super::{
-    ParseError, content_text, end_timestamp, first_line, is_injected_user_message, read_jsonl,
-    string,
+    ParseError, content_text, end_timestamp, first_line, is_injected_user_message, push_unique,
+    read_jsonl, string,
 };
 
 pub fn parse_codex(
@@ -19,6 +19,8 @@ pub fn parse_codex(
         .to_owned();
     let mut started_at = String::new();
     let mut cwd = None;
+    let mut started_via = None;
+    let mut models = Vec::new();
     let mut messages = Vec::new();
 
     for record in records {
@@ -38,7 +40,9 @@ pub fn parse_codex(
                     .or(timestamp)
                     .unwrap_or(started_at);
                 cwd = string(payload.get("cwd")).or(cwd);
+                started_via = codex_started_via(payload).or(started_via);
             }
+            "turn_context" => push_unique(&mut models, string(payload.get("model"))),
             "event_msg" if payload.get("type").and_then(Value::as_str) == Some("user_message") => {
                 if let Some(content) = string(payload.get("message")) {
                     let kind = if is_injected_user_message(&content) {
@@ -159,10 +163,31 @@ pub fn parse_codex(
         source_path: path.display().to_string(),
         title,
         cwd,
+        started_via,
+        models,
         started_at,
         updated_at,
         messages,
     }))
+}
+
+fn codex_started_via(payload: &Value) -> Option<String> {
+    let source = payload.get("source");
+    if source.and_then(|value| value.get("subagent")).is_some() {
+        return Some("Codex subagent".to_owned());
+    }
+
+    let originator = string(payload.get("originator"));
+    match originator.as_deref() {
+        Some("codex-tui") => Some("codex".to_owned()),
+        Some("Codex Desktop" | "codex_work_desktop") => Some("Codex Desktop".to_owned()),
+        Some(originator) => Some(originator.to_owned()),
+        None => match source.and_then(Value::as_str) {
+            Some("cli") => Some("codex".to_owned()),
+            Some("vscode") => Some("Codex Desktop".to_owned()),
+            _ => None,
+        },
+    }
 }
 
 fn push_message(
@@ -190,7 +215,8 @@ mod tests {
     fn keeps_one_copy_of_visible_codex_turns_and_preserves_tools() {
         let mut file = tempfile::NamedTempFile::new().unwrap();
         let records = [
-            serde_json::json!({"type":"session_meta","timestamp":"2026-07-01T10:00:00Z","payload":{"id":"session-1","cwd":"/tmp/project"}}),
+            serde_json::json!({"type":"session_meta","timestamp":"2026-07-01T10:00:00Z","payload":{"id":"session-1","cwd":"/tmp/project","originator":"codex-tui","source":"cli"}}),
+            serde_json::json!({"type":"turn_context","timestamp":"2026-07-01T10:00:00Z","payload":{"model":"gpt-5.6-sol"}}),
             serde_json::json!({"type":"event_msg","timestamp":"2026-07-01T10:00:01Z","payload":{"type":"user_message","message":"Investigate this"}}),
             serde_json::json!({"type":"event_msg","timestamp":"2026-07-01T10:00:02Z","payload":{"type":"agent_message","message":"duplicate answer"}}),
             serde_json::json!({"type":"response_item","timestamp":"2026-07-01T10:00:02Z","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"The answer"}]}}),
@@ -202,6 +228,8 @@ mod tests {
 
         let conversation = parse_codex(file.path(), &HashMap::new()).unwrap().unwrap();
         assert_eq!(conversation.title, "Investigate this");
+        assert_eq!(conversation.started_via.as_deref(), Some("codex"));
+        assert_eq!(conversation.models, ["gpt-5.6-sol"]);
         assert_eq!(conversation.clean_messages().count(), 2);
         assert_eq!(conversation.messages.len(), 3);
         assert!(

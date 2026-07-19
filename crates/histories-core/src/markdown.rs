@@ -19,6 +19,7 @@ impl ExportMode {
 
 pub fn render_markdown(conversation: &Conversation, mode: ExportMode) -> String {
     let cwd = conversation.cwd.as_deref().unwrap_or("");
+    let started_via = conversation.started_via.as_deref().unwrap_or("");
     let mut lines = vec![
         "---".to_owned(),
         format!("session_id: {}", yaml_string(&conversation.external_id)),
@@ -27,6 +28,11 @@ pub fn render_markdown(conversation: &Conversation, mode: ExportMode) -> String 
         format!("updated: {}", yaml_string(&conversation.updated_at)),
         format!("title: {}", yaml_string(&conversation.title)),
         format!("cwd: {}", yaml_string(cwd)),
+        format!("started_via: {}", yaml_string(started_via)),
+        format!(
+            "models: {}",
+            serde_json::to_string(&conversation.models).unwrap_or_else(|_| "[]".to_owned())
+        ),
         format!("source_path: {}", yaml_string(&conversation.source_path)),
         format!(
             "mode: {}",
@@ -125,6 +131,8 @@ mod tests {
             source_path: "/tmp/abc.jsonl".to_owned(),
             title: "Example".to_owned(),
             cwd: Some("/tmp/project".to_owned()),
+            started_via: Some("codex".to_owned()),
+            models: vec!["gpt-5.6-sol".to_owned()],
             started_at: "2026-07-01T10:00:00Z".to_owned(),
             updated_at: "2026-07-01T10:01:00Z".to_owned(),
             messages: vec![
@@ -158,6 +166,8 @@ mod tests {
         let markdown = render_markdown(&fixture(), ExportMode::Clean);
         assert!(markdown.contains("## User\n\nQuestion"));
         assert!(markdown.contains("## Codex\n\nAnswer"));
+        assert!(markdown.contains("started_via: \"codex\""));
+        assert!(markdown.contains("models: [\"gpt-5.6-sol\"]"));
         assert!(!markdown.contains("output"));
     }
 

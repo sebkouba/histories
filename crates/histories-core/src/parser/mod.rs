@@ -82,6 +82,12 @@ pub(super) fn string(value: Option<&Value>) -> Option<String> {
         .map(str::to_owned)
 }
 
+pub(super) fn push_unique(values: &mut Vec<String>, value: Option<String>) {
+    if let Some(value) = value.filter(|value| !values.contains(value)) {
+        values.push(value);
+    }
+}
+
 pub(super) fn first_line(value: &str) -> String {
     value
         .lines()

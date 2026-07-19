@@ -75,6 +75,8 @@ pub struct Conversation {
     pub source_path: String,
     pub title: String,
     pub cwd: Option<String>,
+    pub started_via: Option<String>,
+    pub models: Vec<String>,
     pub started_at: String,
     pub updated_at: String,
     pub messages: Vec<Message>,

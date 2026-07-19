@@ -5,7 +5,10 @@ use std::{
     path::Path,
 };
 
-use super::{ParseError, end_timestamp, first_line, is_injected_user_message, read_jsonl, string};
+use super::{
+    ParseError, end_timestamp, first_line, is_injected_user_message, push_unique, read_jsonl,
+    string,
+};
 
 pub fn parse_pi(path: &Path) -> Result<Option<Conversation>, ParseError> {
     let records = read_jsonl(path)?;
@@ -57,13 +60,25 @@ pub fn parse_pi(path: &Path) -> Result<Option<Conversation>, ParseError> {
     path_ids.reverse();
 
     let mut messages = Vec::new();
+    let mut models = Vec::new();
     for id in path_ids {
         let Some(record) = nodes.get(&id) else {
             continue;
         };
         let timestamp = string(record.get("timestamp"));
         match record.get("type").and_then(Value::as_str) {
-            Some("message") => parse_message(record, timestamp, &mut messages),
+            Some("model_change") => push_unique(&mut models, string(record.get("modelId"))),
+            Some("message") => {
+                push_unique(
+                    &mut models,
+                    string(
+                        record
+                            .get("message")
+                            .and_then(|message| message.get("model")),
+                    ),
+                );
+                parse_message(record, timestamp, &mut messages);
+            }
             Some("custom_message") => {
                 if let Some(content) = string(record.get("content")) {
                     push_message(
@@ -115,6 +130,8 @@ pub fn parse_pi(path: &Path) -> Result<Option<Conversation>, ParseError> {
         source_path: path.display().to_string(),
         title,
         cwd: string(header.get("cwd")),
+        started_via: Some("pi".to_owned()),
+        models,
         started_at,
         updated_at,
         messages,
@@ -233,7 +250,8 @@ mod tests {
         let mut file = tempfile::NamedTempFile::new().unwrap();
         let records = [
             serde_json::json!({"type":"session","id":"pi-1","timestamp":"2026-07-01T10:00:00Z","cwd":"/tmp/pi"}),
-            serde_json::json!({"type":"message","id":"u1","parentId":null,"timestamp":"2026-07-01T10:00:01Z","message":{"role":"user","content":[{"type":"text","text":"Help me"}]}}),
+            serde_json::json!({"type":"model_change","id":"m1","parentId":null,"timestamp":"2026-07-01T10:00:00Z","provider":"anthropic","modelId":"claude-opus-4.8"}),
+            serde_json::json!({"type":"message","id":"u1","parentId":"m1","timestamp":"2026-07-01T10:00:01Z","message":{"role":"user","content":[{"type":"text","text":"Help me"}]}}),
             serde_json::json!({"type":"message","id":"a-old","parentId":"u1","timestamp":"2026-07-01T10:00:02Z","message":{"role":"assistant","content":[{"type":"text","text":"old branch"}]}}),
             serde_json::json!({"type":"message","id":"a-new","parentId":"u1","timestamp":"2026-07-01T10:00:03Z","message":{"role":"assistant","content":[{"type":"thinking","thinking":"privately"},{"type":"toolCall","name":"bash","arguments":{"cmd":"pwd"}},{"type":"text","text":"new branch"}]}}),
         ];
@@ -247,6 +265,8 @@ mod tests {
             .map(|message| message.content.as_str())
             .collect::<Vec<_>>();
         assert_eq!(clean, ["Help me", "new branch"]);
+        assert_eq!(conversation.started_via.as_deref(), Some("pi"));
+        assert_eq!(conversation.models, ["claude-opus-4.8"]);
         assert_eq!(conversation.messages.len(), 4);
         assert!(
             !conversation

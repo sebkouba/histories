@@ -18,6 +18,8 @@ fn parses_scrubbed_codex_fixture() {
         .collect::<Vec<_>>();
 
     assert_eq!(conversation.external_id, "fixture-codex");
+    assert_eq!(conversation.started_via.as_deref(), Some("codex"));
+    assert_eq!(conversation.models, ["gpt-5.6-sol"]);
     assert_eq!(clean, ["Review the release", "The release is ready"]);
     assert_eq!(conversation.messages.len(), 3);
 }
@@ -31,6 +33,8 @@ fn parses_only_the_active_pi_fixture_branch() {
         .collect::<Vec<_>>();
 
     assert_eq!(clean, ["Choose a branch", "Active answer"]);
+    assert_eq!(conversation.started_via.as_deref(), Some("pi"));
+    assert_eq!(conversation.models, ["claude-opus-4.8"]);
     assert!(
         !conversation
             .messages
@@ -49,4 +53,5 @@ fn parses_only_the_current_chatgpt_fixture_branch() {
 
     assert_eq!(clean, ["Choose a branch", "Active answer"]);
     assert_eq!(conversations[0].title, "Fixture conversation");
+    assert_eq!(conversations[0].models, ["gpt-5.6"]);
 }
