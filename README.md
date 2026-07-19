@@ -21,8 +21,9 @@ _Screenshot uses synthetic, scrubbed fixture data._
 
 ## What it does
 
-- Shows recent conversations grouped by day, with app, time, approximate token
-  length, message counts, and working directory.
+- Shows recent conversations grouped by day, with app, time, models used,
+  originating client or base command when available, approximate token length,
+  message counts, and working directory.
 - Full-text searches user and assistant messages with SQLite FTS5.
 - Highlights search terms in conversation previews and scrolls to the first
   match automatically.
@@ -133,6 +134,11 @@ Pi histories are branch graphs. Histories follows the most recently active leaf
 back to the root, so abandoned branches do not get mixed into the transcript.
 Codex histories contain duplicate visible events; Histories keeps the canonical
 user and assistant records while retaining tools for full mode.
+
+Histories also reads model identifiers and the originating client when those
+fields are present. Codex and Pi histories do not preserve the exact shell
+arguments used to launch a session, so `codex` and `pi` in **Started via** mean
+the recorded base command; desktop and subagent sessions are labeled separately.
 
 The ChatGPT macOS app stores per-conversation `.data` files, but they are encrypted
 and do not expose a stable readable transcript format. Histories therefore imports

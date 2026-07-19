@@ -19,6 +19,8 @@ export type ConversationSummary = {
   external_id: string;
   title: string;
   cwd: string | null;
+  started_via: string | null;
+  models: string[];
   started_at: string;
   updated_at: string;
   approx_clean_tokens: number;

@@ -396,7 +396,11 @@ export function App() {
                       <time dateTime={conversationTimestamp(conversation, sortBy)}>{timeLabel(conversationTimestamp(conversation, sortBy))}</time>
                       <button className="conversation-title" onClick={() => setActiveId(conversation.id)}>
                         <span className="title-line"><SourceMark source={conversation.source} /><strong>{conversation.title}</strong></span>
-                        <span className="message-count">{conversation.user_message_count} user · {conversation.assistant_message_count} agent messages</span>
+                        <span className="conversation-details">
+                          <span>{conversation.user_message_count} user · {conversation.assistant_message_count} agent messages</span>
+                          {conversation.models.length > 0 && <code title={`Models used: ${modelLabel(conversation.models)}`}>{modelLabel(conversation.models)}</code>}
+                          {conversation.started_via && <code title={`Started via ${conversation.started_via}`}>via {conversation.started_via}</code>}
+                        </span>
                       </button>
                       <div className="token-count"><strong>~{humanTokens(mode === "clean" ? conversation.approx_clean_tokens : conversation.approx_full_tokens)}</strong><span>tokens</span></div>
                       <div className="cwd" title={conversation.cwd ?? "No working directory"}>{shortPath(conversation.cwd, paths?.home_dir)}</div>
@@ -444,6 +448,12 @@ export function App() {
                 <span>·</span>
                 <span>~{humanTokens(mode === "clean" ? preview.approx_clean_tokens : preview.approx_full_tokens)} tokens</span>
               </div>
+              {(preview.models.length > 0 || preview.started_via) && (
+                <div className="preview-context">
+                  {preview.models.length > 0 && <span><strong>{preview.models.length === 1 ? "Model" : "Models"}</strong><code>{modelLabel(preview.models)}</code></span>}
+                  {preview.started_via && <span><strong>Started via</strong><code>{preview.started_via}</code></span>}
+                </div>
+              )}
               <HighlightedMarkdown markdown={preview.markdown} query={query} />
               <div className="preview-actions">
                 <button className="button subtle" onClick={() => void copyPath(preview)}><PathIcon /> Copy path</button>
@@ -524,6 +534,10 @@ function escapeRegExp(value: string) {
 
 export function conversationTimestamp(conversation: ConversationSummary, sortBy: ConversationOrder) {
   return sortBy === "updated_at" ? conversation.updated_at : conversation.started_at;
+}
+
+export function modelLabel(models: string[]) {
+  return models.join(" → ");
 }
 
 export function groupByDay(conversations: ConversationSummary[], sortBy: ConversationOrder): Array<[string, ConversationSummary[]]> {

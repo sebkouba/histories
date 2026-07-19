@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ConversationDocument } from "./types";
-import { bundleDocuments, conversationTimestamp, groupByDay, searchTerms, shortPath } from "./App";
+import { bundleDocuments, conversationTimestamp, groupByDay, modelLabel, searchTerms, shortPath } from "./App";
 
 function document(id: number, startedAt: string, markdown: string): ConversationDocument {
   return {
@@ -9,6 +9,8 @@ function document(id: number, startedAt: string, markdown: string): Conversation
     external_id: `session-${id}`,
     title: `Session ${id}`,
     cwd: null,
+    started_via: "Codex Desktop",
+    models: ["gpt-5.6-sol"],
     started_at: startedAt,
     updated_at: startedAt,
     approx_clean_tokens: 10,
@@ -34,6 +36,12 @@ describe("conversation ordering dates", () => {
     expect(conversationTimestamp(conversation, "updated_at")).toBe("2026-07-03T12:00:00Z");
     expect(groupByDay([conversation], "started_at")[0][0]).toBe("2026-07-01");
     expect(groupByDay([conversation], "updated_at")[0][0]).toBe("2026-07-03");
+  });
+});
+
+describe("modelLabel", () => {
+  it("preserves the order of model switches", () => {
+    expect(modelLabel(["gpt-5.5", "gpt-5.6"])).toBe("gpt-5.5 → gpt-5.6");
   });
 });
 
