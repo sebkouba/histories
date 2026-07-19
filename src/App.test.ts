@@ -10,6 +10,7 @@ function document(id: number, startedAt: string, markdown: string): Conversation
     title: `Session ${id}`,
     cwd: null,
     started_via: "Codex Desktop",
+    start_command: null,
     models: ["gpt-5.6-sol"],
     started_at: startedAt,
     updated_at: startedAt,

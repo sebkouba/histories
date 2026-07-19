@@ -397,7 +397,7 @@ fn print_results(results: &[histories_core::ConversationSummary], json: bool) ->
         eprintln!("No conversations found.");
         return Ok(());
     }
-    println!("ID\tDATE\tAPP\tMODEL\tSTARTED VIA\tTOKENS\tTITLE\tCWD");
+    println!("ID\tDATE\tAPP\tMODEL\tCOMMAND\tTOKENS\tTITLE\tCWD");
     for conversation in results {
         let date = DateTime::parse_from_rfc3339(&conversation.started_at)
             .map(|date| {
@@ -412,7 +412,7 @@ fn print_results(results: &[histories_core::ConversationSummary], json: bool) ->
             date,
             conversation.source,
             conversation.models.join(" → "),
-            conversation.started_via.as_deref().unwrap_or(""),
+            conversation.start_command.as_deref().unwrap_or(""),
             human_tokens(conversation.approx_clean_tokens),
             one_line(&conversation.title),
             conversation.cwd.as_deref().unwrap_or(""),

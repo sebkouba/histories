@@ -399,7 +399,6 @@ export function App() {
                         <span className="conversation-details">
                           <span>{conversation.user_message_count} user · {conversation.assistant_message_count} agent messages</span>
                           {conversation.models.length > 0 && <code title={`Models used: ${modelLabel(conversation.models)}`}>{modelLabel(conversation.models)}</code>}
-                          {conversation.started_via && <code title={`Started via ${conversation.started_via}`}>via {conversation.started_via}</code>}
                         </span>
                       </button>
                       <div className="token-count"><strong>~{humanTokens(mode === "clean" ? conversation.approx_clean_tokens : conversation.approx_full_tokens)}</strong><span>tokens</span></div>
@@ -448,10 +447,10 @@ export function App() {
                 <span>·</span>
                 <span>~{humanTokens(mode === "clean" ? preview.approx_clean_tokens : preview.approx_full_tokens)} tokens</span>
               </div>
-              {(preview.models.length > 0 || preview.started_via) && (
+              {(preview.models.length > 0 || preview.start_command) && (
                 <div className="preview-context">
                   {preview.models.length > 0 && <span><strong>{preview.models.length === 1 ? "Model" : "Models"}</strong><code>{modelLabel(preview.models)}</code></span>}
-                  {preview.started_via && <span><strong>Started via</strong><code>{preview.started_via}</code></span>}
+                  {preview.start_command && <span className="preview-command"><strong>Command</strong><code>{preview.start_command}</code></span>}
                 </div>
               )}
               <HighlightedMarkdown markdown={preview.markdown} query={query} />

@@ -174,10 +174,12 @@ button:focus-visible, input:focus-visible { outline: 2px solid rgba(180, 84, 47,
 .close-preview { width: 32px; height: 32px; display: grid; place-items: center; flex: 0 0 auto; border: 1px solid var(--line); border-radius: 8px; color: var(--muted); background: #fff; cursor: pointer; }
 .preview-meta { min-height: 47px; display: flex; align-items: center; gap: 7px; padding: 0 24px; border-bottom: 1px solid var(--line-soft); color: var(--muted); font-size: 10px; }
 .preview-meta .source-mark { width: 20px; height: 20px; flex-basis: 20px; font-size: 10px; }
-.preview-context { min-height: 43px; display: flex; align-items: center; gap: 18px; padding: 7px 24px; border-bottom: 1px solid var(--line-soft); color: var(--muted); font-size: 10px; }
+.preview-context { min-height: 43px; display: flex; flex-direction: column; align-items: stretch; justify-content: center; gap: 6px; padding: 9px 24px; border-bottom: 1px solid var(--line-soft); color: var(--muted); font-size: 10px; }
 .preview-context span { min-width: 0; display: flex; align-items: center; gap: 7px; }
 .preview-context strong { flex: 0 0 auto; color: #91897e; font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; }
 .preview-context code { overflow: hidden; color: #585249; text-overflow: ellipsis; white-space: nowrap; font: 10px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.preview-context .preview-command { align-items: flex-start; }
+.preview-context .preview-command code { overflow: visible; white-space: normal; overflow-wrap: anywhere; }
 .preview-panel pre { min-height: 0; flex: 1; overflow: auto; scrollbar-gutter: stable; margin: 0; padding: 22px 25px 90px; color: #49453e; white-space: pre-wrap; overflow-wrap: anywhere; font: 11px/1.65 ui-monospace, SFMono-Regular, Menlo, monospace; tab-size: 2; }
 .preview-panel mark { margin: 0 -1px; padding: 1px; border-radius: 3px; color: #34271f; background: #f5c86f; box-shadow: 0 0 0 1px rgba(150, 90, 36, 0.16); }
 .preview-actions { position: absolute; right: 0; bottom: 0; left: 0; display: flex; justify-content: flex-end; gap: 8px; padding: 13px 20px; border-top: 1px solid var(--line); background: rgba(251, 249, 245, 0.94); backdrop-filter: blur(12px); }

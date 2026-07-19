@@ -20,6 +20,7 @@ export type ConversationSummary = {
   title: string;
   cwd: string | null;
   started_via: string | null;
+  start_command: string | null;
   models: string[];
   started_at: string;
   updated_at: string;
