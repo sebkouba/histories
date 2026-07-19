@@ -76,6 +76,7 @@ pub struct Conversation {
     pub title: String,
     pub cwd: Option<String>,
     pub started_via: Option<String>,
+    pub start_command: Option<String>,
     pub models: Vec<String>,
     pub started_at: String,
     pub updated_at: String,

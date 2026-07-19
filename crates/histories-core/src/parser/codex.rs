@@ -164,6 +164,7 @@ pub fn parse_codex(
         title,
         cwd,
         started_via,
+        start_command: None,
         models,
         started_at,
         updated_at,

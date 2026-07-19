@@ -32,6 +32,7 @@ pub struct ConversationSummary {
     pub title: String,
     pub cwd: Option<String>,
     pub started_via: Option<String>,
+    pub start_command: Option<String>,
     pub models: Vec<String>,
     pub started_at: String,
     pub updated_at: String,
@@ -88,6 +89,11 @@ impl Catalog {
             "conversations",
             "models_json",
             "models_json TEXT NOT NULL DEFAULT '[]'",
+        )? | ensure_column(
+            &connection,
+            "conversations",
+            "start_command",
+            "start_command TEXT",
         )?;
         if metadata_columns_added {
             // Source files themselves are authoritative. Invalidating their fingerprints
@@ -106,6 +112,7 @@ impl Catalog {
         title: &str,
         cwd: Option<&str>,
         started_via: Option<&str>,
+        start_command: Option<&str>,
         models: &[String],
         started_at: &str,
         updated_at: &str,
@@ -121,15 +128,16 @@ impl Catalog {
         let models_json = serde_json::to_string(models)?;
         self.connection.execute(
             "INSERT INTO conversations (
-                source, external_id, source_path, title, cwd, started_via, models_json,
+                source, external_id, source_path, title, cwd, started_via, start_command, models_json,
                 started_at, updated_at,
                 approx_clean_tokens, approx_full_tokens, message_count,
                 user_message_count, assistant_message_count, clean_markdown_path,
                 full_markdown_path, clean_markdown
-             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)
              ON CONFLICT(source, external_id) DO UPDATE SET
                 source_path=excluded.source_path, title=excluded.title, cwd=excluded.cwd,
-                started_via=excluded.started_via, models_json=excluded.models_json,
+                started_via=excluded.started_via, start_command=excluded.start_command,
+                models_json=excluded.models_json,
                 started_at=excluded.started_at, updated_at=excluded.updated_at,
                 approx_clean_tokens=excluded.approx_clean_tokens,
                 approx_full_tokens=excluded.approx_full_tokens,
@@ -146,6 +154,7 @@ impl Catalog {
                 title,
                 cwd,
                 started_via,
+                start_command,
                 models_json,
                 started_at,
                 updated_at,
@@ -321,7 +330,7 @@ impl Catalog {
         let mut statement = self.connection.prepare(&sql)?;
         let rows = statement.query_map(params_from_iter(ids.iter()), |row| {
             let summary = map_summary(row)?;
-            let clean_markdown: String = row.get(17)?;
+            let clean_markdown: String = row.get(18)?;
             Ok((summary, clean_markdown))
         })?;
         rows.map(|row| {
@@ -395,6 +404,7 @@ fn map_summary(row: &rusqlite::Row<'_>) -> rusqlite::Result<ConversationSummary>
         cwd: row.get(4)?,
         started_via: row.get(15)?,
         models: serde_json::from_str(&row.get::<_, String>(16)?).unwrap_or_default(),
+        start_command: row.get(17)?,
         started_at: row.get(5)?,
         updated_at: row.get(6)?,
         approx_clean_tokens: row.get::<_, i64>(7)? as usize,
@@ -425,7 +435,8 @@ fn fts_query(query: &str) -> Option<String> {
 const SUMMARY_SELECT: &str = "SELECT c.id, c.source, c.external_id, c.title, c.cwd,
     c.started_at, c.updated_at, c.approx_clean_tokens, c.approx_full_tokens,
     c.message_count, c.user_message_count, c.assistant_message_count,
-    c.clean_markdown_path, c.full_markdown_path, c.source_path, c.started_via, c.models_json";
+    c.clean_markdown_path, c.full_markdown_path, c.source_path, c.started_via, c.models_json,
+    c.start_command";
 
 const SCHEMA: &str = "
 CREATE TABLE IF NOT EXISTS conversations (
@@ -436,6 +447,7 @@ CREATE TABLE IF NOT EXISTS conversations (
     title TEXT NOT NULL,
     cwd TEXT,
     started_via TEXT,
+    start_command TEXT,
     models_json TEXT NOT NULL DEFAULT '[]',
     started_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
@@ -509,6 +521,7 @@ mod tests {
                 title,
                 Some("/tmp/project"),
                 Some("codex"),
+                None,
                 &["gpt-5.6-sol".to_owned()],
                 date,
                 date,
@@ -575,6 +588,7 @@ mod tests {
                 "Older active session",
                 Some("/tmp/project"),
                 Some("codex"),
+                None,
                 &["gpt-5.6-sol".to_owned()],
                 "2026-07-01T10:00:00Z",
                 "2026-07-03T10:00:00Z",

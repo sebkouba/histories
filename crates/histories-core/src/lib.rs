@@ -5,6 +5,7 @@ pub mod markdown;
 pub mod model;
 pub mod parser;
 pub mod refresh;
+mod shell_history;
 
 pub use catalog::{
     Catalog, ConversationDocument, ConversationOrder, ConversationSummary, SearchRequest,

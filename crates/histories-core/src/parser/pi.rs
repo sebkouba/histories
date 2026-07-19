@@ -131,6 +131,7 @@ pub fn parse_pi(path: &Path) -> Result<Option<Conversation>, ParseError> {
         title,
         cwd: string(header.get("cwd")),
         started_via: Some("pi".to_owned()),
+        start_command: None,
         models,
         started_at,
         updated_at,

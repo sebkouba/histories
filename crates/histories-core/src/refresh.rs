@@ -1,6 +1,7 @@
 use crate::{
     AppPaths, Catalog, Conversation, ExportMode, HistoriesError, MessageKind, Result, SourceConfig,
     SourceKind, config::atomic_write, parse_chatgpt_export, parse_codex, parse_pi, render_markdown,
+    shell_history::ShellHistory,
 };
 use chrono::{DateTime, Datelike, Timelike};
 use fs2::FileExt;
@@ -60,6 +61,7 @@ impl Refresher {
     fn refresh_unlocked(&self) -> Result<RefreshReport> {
         let catalog = Catalog::open(&self.paths.database_path)?;
         let names = load_codex_names(&self.config.codex_roots);
+        let shell_history = ShellHistory::load(&self.paths.home_dir.join(".zsh_history"));
         let mut report = RefreshReport::default();
 
         self.refresh_jsonl_source(
@@ -73,7 +75,7 @@ impl Refresher {
             &catalog,
             SourceKind::Pi,
             &self.config.pi_roots,
-            parse_pi,
+            |path| parse_pi_with_history(path, &shell_history),
             &mut report,
         )?;
         self.refresh_chatgpt(&catalog, &mut report)?;
@@ -242,6 +244,7 @@ impl Refresher {
             &conversation.title,
             conversation.cwd.as_deref(),
             conversation.started_via.as_deref(),
+            conversation.start_command.as_deref(),
             &conversation.models,
             &conversation.started_at,
             &conversation.updated_at,
@@ -260,6 +263,7 @@ impl Refresher {
     fn ensure_full_exports(&self, catalog: &Catalog, ids: &[i64]) -> Result<()> {
         let documents = catalog.documents(ids, ExportMode::Clean)?;
         let names = load_codex_names(&self.config.codex_roots);
+        let shell_history = ShellHistory::load(&self.paths.home_dir.join(".zsh_history"));
         let mut chatgpt_cache = HashMap::<String, Vec<Conversation>>::new();
 
         for document in documents {
@@ -267,7 +271,7 @@ impl Refresher {
             let source_path = Path::new(&summary.source_path);
             let conversation = match summary.source {
                 SourceKind::Codex => parse_codex(source_path, &names)?,
-                SourceKind::Pi => parse_pi(source_path)?,
+                SourceKind::Pi => parse_pi_with_history(source_path, &shell_history)?,
                 SourceKind::Chatgpt => {
                     if !chatgpt_cache.contains_key(&summary.source_path) {
                         chatgpt_cache.insert(
@@ -329,6 +333,17 @@ impl Refresher {
         }
         Ok(())
     }
+}
+
+fn parse_pi_with_history(
+    path: &Path,
+    shell_history: &ShellHistory,
+) -> std::result::Result<Option<Conversation>, crate::ParseError> {
+    let mut conversation = parse_pi(path)?;
+    if let Some(conversation) = conversation.as_mut() {
+        conversation.start_command = shell_history.pi_command_near(&conversation.started_at);
+    }
+    Ok(conversation)
 }
 
 struct RefreshLock(File);
@@ -514,6 +529,7 @@ mod tests {
             title: "Title".to_owned(),
             cwd: None,
             started_via: Some("pi".to_owned()),
+            start_command: Some("pi --extension custom.ts".to_owned()),
             models: vec!["claude-opus-4.8".to_owned()],
             started_at: "2026-07-01T10:22:00Z".to_owned(),
             updated_at: "2026-07-01T10:23:00Z".to_owned(),

@@ -175,6 +175,7 @@ fn parse_conversation(path: &Path, entry: &Value) -> Option<Conversation> {
         title,
         cwd: None,
         started_via: None,
+        start_command: None,
         models,
         started_at,
         updated_at,
