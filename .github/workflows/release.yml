@@ -56,7 +56,14 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: Histories ${{ github.ref_name }}
-          releaseBody: See CHANGELOG.md for release notes.
+          releaseBody: |
+            Histories is a local-first macOS library for finding and reusing conversations from Codex, Pi, and ChatGPT.
+
+            I built it because I use different AI tools and models for different kinds of work. Histories gives me one overview of what I have been doing and lets me copy useful conversations into whichever tool I want to use next.
+
+            This is an early public release. Conversation formats are not stable upstream APIs, so compatibility is maintained on a best-effort basis. Histories reads source histories without modifying them and keeps its catalog and generated transcripts on your Mac.
+
+            See the README for installation and usage, and CHANGELOG.md for the changes included in this version.
           releaseDraft: true
           prerelease: false
           args: --target ${{ matrix.target }} --bundles app,dmg
