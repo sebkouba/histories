@@ -4,20 +4,36 @@
   <img src="src-tauri/app-icon.png" alt="Histories app icon" width="160">
 </p>
 
-Histories is a local-first macOS desktop app and CLI for finding and reusing
-conversations from Codex, Pi, and ChatGPT.
+Histories is a local-first macOS desktop app and CLI that puts recent Codex, Pi,
+and ChatGPT conversations into one searchable library.
 
 > **Public preview:** Histories is usable today, but the upstream conversation
 > formats are not stable APIs. Parser compatibility is maintained on a
 > best-effort basis with scrubbed regression fixtures.
 
-It is built for a simple recurring task: find the conversations you had recently,
-select the useful ones, and copy either their readable transcripts or their
-Markdown paths into another agent session.
+Find the conversations you had recently, select the useful ones, and copy their
+readable transcripts or stable Markdown paths into another agent session.
 
-![Histories library showing synthetic Codex, Pi, and ChatGPT conversations](docs/images/histories-library.jpg)
+## Why I built it
+
+I use different AI tools with different models to try different things. That
+made it surprisingly difficult to keep an overview of what I had been doing—or
+to bring a useful conversation from one tool into another. I built Histories so
+I could see that work in one place and copy the resulting conversations wherever
+I need them next.
+
+![Histories showing synthetic Codex, Pi, and ChatGPT conversations alongside a clean transcript preview](docs/images/histories-library.jpg)
 
 _Screenshot uses synthetic, scrubbed fixture data._
+
+## Download
+
+Download the latest signed and notarized macOS build from
+[GitHub Releases](https://github.com/sebkouba/histories/releases). Builds are
+published for Apple Silicon and Intel Macs.
+
+Downloadable releases contain the desktop app. Build from source below to install
+both the app and command-line tool.
 
 ## What it does
 
@@ -41,7 +57,7 @@ _Screenshot uses synthetic, scrubbed fixture data._
 - Reads source histories without modifying them. SQLite and Markdown are derived
   data stored under the Histories app-data directory.
 
-## Install locally
+## Build from source
 
 Requirements: macOS, Xcode command-line tools, Rust, Node.js, and pnpm.
 
@@ -60,11 +76,18 @@ Open the app:
 open ~/Applications/Histories.app
 ```
 
+To install the app in the system Applications folder instead:
+
+```bash
+HISTORIES_APP_INSTALL_DIR=/Applications ./scripts/install.sh
+open /Applications/Histories.app
+```
+
 If `~/.local/bin` is not already on `PATH`, either add it or run the CLI using
 its full path.
 
-The local installer builds from source. Downloadable releases, when available,
-are built for Apple Silicon and Intel, Developer ID signed, and notarized.
+The local installer uses an ad-hoc signature. Downloadable releases are built
+for Apple Silicon and Intel, Developer ID signed, and notarized.
 
 ## CLI workflows
 

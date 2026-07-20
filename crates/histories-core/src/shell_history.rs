@@ -156,7 +156,7 @@ mod tests {
 : 1784463625:0;pi \\
      --no-context-files \\
      --extension ../.pi/extensions/time-context.ts \\
-     --system-prompt "$(cat ifs-seb-2.md)"
+     --system-prompt "$(cat coach.md)"
 "#,
         );
 
@@ -165,7 +165,7 @@ mod tests {
                 .pi_command_near("2026-07-19T12:20:26.211Z")
                 .as_deref(),
             Some(
-                "pi --no-context-files --extension ../.pi/extensions/time-context.ts --system-prompt \"$(cat ifs-seb-2.md)\""
+                "pi --no-context-files --extension ../.pi/extensions/time-context.ts --system-prompt \"$(cat coach.md)\""
             )
         );
     }
