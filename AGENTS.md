@@ -38,3 +38,12 @@ Use the repository's pinned pnpm/Rust dependencies. Add parser fixtures and Rust
 tests for ingestion changes; visually exercise search, preview, selection, both
 transcript modes, and clipboard actions for UI changes. See `README.md` for CLI
 examples, source details, and data paths.
+
+## Required change handoff
+
+For every user-requested change, first confirm the implementation with the
+relevant tests and production build. Then stop every running `histories-app`
+instance, install the latest app and CLI into `~/Applications/Histories.app` and
+`~/.local/bin/histories`, launch the installed app, and verify that it stays
+running. Do this automatically unless the user explicitly asks not to deploy or
+launch the change.

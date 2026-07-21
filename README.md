@@ -41,12 +41,15 @@ both the app and command-line tool.
   recoverable Pi launch commands, approximate token length, message counts, and
   working directory.
 - Full-text searches user and assistant messages with SQLite FTS5.
+- Filters results by strict user/agent message-count bounds and a
+  case-insensitive model-name string.
 - Highlights search terms in conversation previews and scrolls to the first
   match automatically.
 - Keeps library and transcript scrolling inside their respective panes, with a
   draggable divider that remembers the preferred preview width.
 - Keeps selections while search and filters change, then copies all selected
   conversations as one chronological Markdown bundle.
+- Selects or deselects every currently visible result in one action.
 - Offers `clean` transcripts (user + agent messages) and on-demand `full`
   transcripts (including tools, tool results, reasoning summaries, and system
   records).
@@ -54,6 +57,8 @@ both the app and command-line tool.
   Finder.
 - Refreshes changed source histories before CLI queries, when the app regains
   focus, and every 30 seconds while it remains visible.
+- Shows the app version and an automatically increasing Git build number in the
+  library footer.
 - Reads source histories without modifying them. SQLite and Markdown are derived
   data stored under the Histories app-data directory.
 
