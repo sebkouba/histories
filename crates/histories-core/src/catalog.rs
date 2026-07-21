@@ -555,7 +555,10 @@ mod tests {
         user_message_count: usize,
         assistant_message_count: usize,
     ) {
-        let models = models.iter().map(|model| (*model).to_owned()).collect::<Vec<_>>();
+        let models = models
+            .iter()
+            .map(|model| (*model).to_owned())
+            .collect::<Vec<_>>();
         catalog
             .upsert_conversation(
                 SourceKind::Codex,
