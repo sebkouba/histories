@@ -19,6 +19,9 @@ pub struct SearchRequest {
     pub since: Option<String>,
     pub until: Option<String>,
     pub cwd: Option<String>,
+    pub model: Option<String>,
+    pub messages_greater_than: Option<usize>,
+    pub messages_less_than: Option<usize>,
     pub sort_by: ConversationOrder,
     pub limit: usize,
     pub offset: usize,
@@ -288,6 +291,18 @@ impl Catalog {
             sql.push_str(" AND c.cwd LIKE ?");
             values.push(Box::new(format!("%{cwd}%")));
         }
+        if let Some(pattern) = request.model.as_deref().and_then(like_pattern) {
+            sql.push_str(" AND c.models_json LIKE ? ESCAPE '\\' COLLATE NOCASE");
+            values.push(Box::new(pattern));
+        }
+        if let Some(message_count) = request.messages_greater_than {
+            sql.push_str(" AND (c.user_message_count + c.assistant_message_count) > ?");
+            values.push(Box::new(i64::try_from(message_count).unwrap_or(i64::MAX)));
+        }
+        if let Some(message_count) = request.messages_less_than {
+            sql.push_str(" AND (c.user_message_count + c.assistant_message_count) < ?");
+            values.push(Box::new(i64::try_from(message_count).unwrap_or(i64::MAX)));
+        }
         let order_column = match request.sort_by {
             ConversationOrder::StartedAt => "c.started_at",
             ConversationOrder::UpdatedAt => "c.updated_at",
@@ -432,6 +447,19 @@ fn fts_query(query: &str) -> Option<String> {
     (!terms.is_empty()).then(|| terms.join(" AND "))
 }
 
+fn like_pattern(value: &str) -> Option<String> {
+    let terms = value
+        .split_whitespace()
+        .filter(|term| !term.is_empty())
+        .map(|term| {
+            term.replace('\\', "\\\\")
+                .replace('%', "\\%")
+                .replace('_', "\\_")
+        })
+        .collect::<Vec<_>>();
+    (!terms.is_empty()).then(|| format!("%{}%", terms.join("%")))
+}
+
 const SUMMARY_SELECT: &str = "SELECT c.id, c.source, c.external_id, c.title, c.cwd,
     c.started_at, c.updated_at, c.approx_clean_tokens, c.approx_full_tokens,
     c.message_count, c.user_message_count, c.assistant_message_count,
@@ -513,6 +541,21 @@ mod tests {
     use super::*;
 
     fn insert(catalog: &Catalog, id: &str, title: &str, body: &str, date: &str) {
+        insert_with_metadata(catalog, id, title, body, date, &["gpt-5.6-sol"], 1, 1);
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn insert_with_metadata(
+        catalog: &Catalog,
+        id: &str,
+        title: &str,
+        body: &str,
+        date: &str,
+        models: &[&str],
+        user_message_count: usize,
+        assistant_message_count: usize,
+    ) {
+        let models = models.iter().map(|model| (*model).to_owned()).collect::<Vec<_>>();
         catalog
             .upsert_conversation(
                 SourceKind::Codex,
@@ -522,14 +565,14 @@ mod tests {
                 Some("/tmp/project"),
                 Some("codex"),
                 None,
-                &["gpt-5.6-sol".to_owned()],
+                &models,
                 date,
                 date,
                 10,
                 20,
-                2,
-                1,
-                1,
+                user_message_count + assistant_message_count,
+                user_message_count,
+                assistant_message_count,
                 "/tmp/clean.md",
                 "/tmp/full.md",
                 body,
@@ -626,6 +669,59 @@ mod tests {
             })
             .unwrap();
         assert_eq!(by_last_message[0].external_id, "older-active");
+    }
+
+    #[test]
+    fn search_filters_by_clean_message_bounds_and_model_string() {
+        let catalog = Catalog::in_memory().unwrap();
+        insert_with_metadata(
+            &catalog,
+            "matching",
+            "IFS session",
+            "protector work",
+            "2026-07-03T10:00:00Z",
+            &["gpt-5.6-sol"],
+            7,
+            6,
+        );
+        insert_with_metadata(
+            &catalog,
+            "too-short",
+            "IFS session",
+            "protector work",
+            "2026-07-02T10:00:00Z",
+            &["gpt-5.6-sol"],
+            6,
+            6,
+        );
+        insert_with_metadata(
+            &catalog,
+            "wrong-model",
+            "IFS session",
+            "protector work",
+            "2026-07-01T10:00:00Z",
+            &["claude-opus-4.8"],
+            8,
+            7,
+        );
+
+        let hits = catalog
+            .search(&SearchRequest {
+                query: Some("IFS".to_owned()),
+                model: Some("GPT 5.6".to_owned()),
+                messages_greater_than: Some(12),
+                messages_less_than: Some(14),
+                limit: 50,
+                ..Default::default()
+            })
+            .unwrap();
+
+        assert_eq!(
+            hits.iter()
+                .map(|item| item.external_id.as_str())
+                .collect::<Vec<_>>(),
+            ["matching"]
+        );
     }
 
     #[test]

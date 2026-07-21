@@ -107,6 +107,15 @@ struct Filters {
     /// Match a substring of the working directory.
     #[arg(long)]
     cwd: Option<String>,
+    /// Match a model name (case-insensitive; spaces may stand for separators).
+    #[arg(long)]
+    model: Option<String>,
+    /// Require more than this many user + agent messages.
+    #[arg(long)]
+    messages_greater_than: Option<usize>,
+    /// Require fewer than this many user + agent messages.
+    #[arg(long)]
+    messages_less_than: Option<usize>,
     /// Maximum conversations to return.
     #[arg(short, long, default_value_t = 100)]
     limit: usize,
@@ -119,6 +128,9 @@ impl Default for Filters {
             until: None,
             sources: Vec::new(),
             cwd: None,
+            model: None,
+            messages_greater_than: None,
+            messages_less_than: None,
             limit: 100,
         }
     }
@@ -356,6 +368,9 @@ fn request(query: Option<String>, filters: Filters) -> Result<SearchRequest> {
         since: filters.since.as_deref().map(parse_bound).transpose()?,
         until: filters.until.as_deref().map(parse_bound).transpose()?,
         cwd: filters.cwd,
+        model: filters.model,
+        messages_greater_than: filters.messages_greater_than,
+        messages_less_than: filters.messages_less_than,
         sort_by: Default::default(),
         limit: filters.limit,
         offset: 0,

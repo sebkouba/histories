@@ -103,6 +103,14 @@ Search the last 20 days of user/agent messages:
 histories search IFS --since 20d
 ```
 
+Filter by user + agent message count and model name (case-insensitive):
+
+```bash
+histories search IFS \
+  --messages-greater-than 12 \
+  --model "GPT 5.6"
+```
+
 Build the context file described in the original use case:
 
 ```bash

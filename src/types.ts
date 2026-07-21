@@ -8,6 +8,9 @@ export type SearchRequest = {
   since: string | null;
   until: string | null;
   cwd: string | null;
+  model: string | null;
+  messages_greater_than: number | null;
+  messages_less_than: number | null;
   sort_by: ConversationOrder;
   limit: number;
   offset: number;
