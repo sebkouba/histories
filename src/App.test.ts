@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ConversationDocument } from "./types";
-import { bundleDocuments, conversationTimestamp, groupByDay, modelLabel, searchTerms, shortPath } from "./App";
+import { bundleDocuments, conversationTimestamp, groupByDay, modelLabel, searchTerms, shortPath, toggleResultSelection } from "./App";
 
 function document(id: number, startedAt: string, markdown: string): ConversationDocument {
   return {
@@ -63,6 +63,22 @@ describe("shortPath", () => {
   it("uses the discovered home directory instead of a developer-specific path", () => {
     expect(shortPath("/Users/alex/code/project", "/Users/alex")).toBe("~/code/project");
     expect(shortPath("/Volumes/work/project", "/Users/alex")).toBe("/Volumes/work/project");
+  });
+});
+
+describe("toggleResultSelection", () => {
+  it("selects and deselects every visible result without clearing hidden selections", () => {
+    const hidden = document(3, "2026-07-03T10:00:00Z", "# Three\n");
+    const results = [
+      document(1, "2026-07-01T10:00:00Z", "# One\n"),
+      document(2, "2026-07-02T10:00:00Z", "# Two\n"),
+    ];
+
+    const selected = toggleResultSelection({ [hidden.id]: hidden }, results);
+    expect(Object.keys(selected).map(Number).sort()).toEqual([1, 2, 3]);
+
+    const deselected = toggleResultSelection(selected, results);
+    expect(Object.keys(deselected).map(Number)).toEqual([3]);
   });
 });
 

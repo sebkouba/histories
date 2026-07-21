@@ -48,6 +48,9 @@ const REFRESH_INTERVAL_MS = 30_000;
 export function App() {
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [query, setQuery] = useState("");
+  const [modelQuery, setModelQuery] = useState("");
+  const [messagesGreaterThan, setMessagesGreaterThan] = useState("");
+  const [messagesLessThan, setMessagesLessThan] = useState("");
   const [rangeDays, setRangeDays] = useState(30);
   const [sources, setSources] = useState<SourceKind[]>([]);
   const [sortBy, setSortBy] = useState<ConversationOrder>("started_at");
@@ -74,10 +77,13 @@ export function App() {
     since: rangeDays ? new Date(Date.now() - rangeDays * 86_400_000).toISOString() : null,
     until: null,
     cwd: null,
+    model: modelQuery.trim() || null,
+    messages_greater_than: integerOrNull(messagesGreaterThan),
+    messages_less_than: integerOrNull(messagesLessThan),
     sort_by: sortBy,
     limit: 400,
     offset: 0,
-  }), [query, rangeDays, sortBy, sources]);
+  }), [messagesGreaterThan, messagesLessThan, modelQuery, query, rangeDays, sortBy, sources]);
 
   const runSearch = useCallback(async (nextRequest = request) => {
     const generation = ++searchGeneration.current;
@@ -182,6 +188,7 @@ export function App() {
   }, []);
 
   const selectedItems = Object.values(selected);
+  const allResultsSelected = conversations.length > 0 && conversations.every((conversation) => selected[conversation.id]);
   const grouped = useMemo(() => groupByDay(conversations, sortBy), [conversations, sortBy]);
 
   function showToast(message: string) {
@@ -200,6 +207,10 @@ export function App() {
       else next[conversation.id] = conversation;
       return next;
     });
+  }
+
+  function toggleAllResults() {
+    setSelected((current) => toggleResultSelection(current, conversations));
   }
 
   async function copyDocuments(ids: number[]) {
@@ -357,6 +368,49 @@ export function App() {
               <span className="mode-hint">{mode === "clean" ? "You + agent only" : "Includes tools + reasoning"}</span>
             </div>
           </div>
+          <div className="advanced-filter-row">
+            <label className="text-filter model-filter">
+              <span className="filter-label">Model contains</span>
+              <input
+                aria-label="Filter by model"
+                onChange={(event) => setModelQuery(event.target.value)}
+                placeholder="e.g. GPT 5.6"
+                spellCheck={false}
+                value={modelQuery}
+              />
+            </label>
+            <div className="message-filter">
+              <span className="filter-label">User + agent messages</span>
+              <div className="message-bounds">
+                <label>
+                  <span>More than</span>
+                  <input
+                    aria-label="More than this many messages"
+                    inputMode="numeric"
+                    min="0"
+                    onChange={(event) => setMessagesGreaterThan(event.target.value)}
+                    placeholder="12"
+                    step="1"
+                    type="number"
+                    value={messagesGreaterThan}
+                  />
+                </label>
+                <label>
+                  <span>Fewer than</span>
+                  <input
+                    aria-label="Fewer than this many messages"
+                    inputMode="numeric"
+                    min="0"
+                    onChange={(event) => setMessagesLessThan(event.target.value)}
+                    placeholder="Any"
+                    step="1"
+                    type="number"
+                    value={messagesLessThan}
+                  />
+                </label>
+              </div>
+            </div>
+          </div>
         </section>
 
         {selectedItems.length > 0 && (
@@ -371,7 +425,12 @@ export function App() {
 
         <section className="result-summary">
           <p><strong>{conversations.length}</strong> conversation{conversations.length === 1 ? "" : "s"} <span>·</span> ~{humanTokens(visibleTokens)} tokens in {mode} mode</p>
-          {query && <p className="query-note">Ranked matches for “{query}”</p>}
+          <div className="result-summary-actions">
+            {query && <p className="query-note">Ranked matches for “{query}”</p>}
+            <button disabled={!conversations.length} onClick={toggleAllResults}>
+              {allResultsSelected ? "Deselect all results" : "Select all results"}
+            </button>
+          </div>
         </section>
 
         {loading ? (
@@ -421,7 +480,10 @@ export function App() {
           <div className="coverage">
             {lastRefresh?.sources.map((source) => <span key={source.source}><i className={source.available ? "ok" : "missing"} />{SOURCE_LABELS[source.source]} {source.available ? "connected" : source.source === "chatgpt" ? "needs export" : "not found"}</span>)}
           </div>
-          {paths && <button title={paths.exports_dir} onClick={() => void revealPath(paths.exports_dir)}><PathIcon size={15} /> Open Markdown library</button>}
+          <div className="footer-actions">
+            <span className="version-indicator" title="App version and auto-incrementing Git build number">v{__APP_VERSION__} · build {__APP_BUILD__}</span>
+            {paths && <button title={paths.exports_dir} onClick={() => void revealPath(paths.exports_dir)}><PathIcon size={15} /> Open Markdown library</button>}
+          </div>
         </footer>
       </main>
 
@@ -600,6 +662,25 @@ function humanTokens(tokens: number) {
   if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(1)}m`;
   if (tokens >= 1_000) return `${(tokens / 1_000).toFixed(1)}k`;
   return String(tokens);
+}
+
+function integerOrNull(value: string) {
+  if (!value.trim()) return null;
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+}
+
+export function toggleResultSelection(
+  current: Record<number, ConversationSummary>,
+  results: ConversationSummary[],
+) {
+  const next = { ...current };
+  const deselect = results.length > 0 && results.every((conversation) => current[conversation.id]);
+  for (const conversation of results) {
+    if (deselect) delete next[conversation.id];
+    else next[conversation.id] = conversation;
+  }
+  return next;
 }
 
 export function bundleDocuments(documents: ConversationDocument[], mode: ExportMode) {
